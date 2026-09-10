@@ -161,7 +161,7 @@ function calcular() {
 
 /* ============================= NAVEGAÇÃO ============================= */
 
-const TITULOS = { pedido: 'Pedido', compras: 'Lista de compras', massa: 'Massa italiana', sabores: 'Cadastro' };
+const TITULOS = { pedido: 'Pedido', compras: 'Lista de compras', massa: 'Massa', sabores: 'Cadastro' };
 let viewAtual = 'pedido';
 
 function irPara(v) {
@@ -203,14 +203,30 @@ function renderPedido() {
   const gPessoa = t.pesoTotal / pessoas;
   const pizzaPessoa = t.totalPizzas / pessoas;
 
-  let cls = 'ok', txt = 'Quantidade equilibrada: entre 2 e 4 fatias por pessoa.';
-  if (t.totalPizzas === 0) { cls = 'warn'; txt = 'Escolha os sabores abaixo para começar.'; }
-  else if (fatiasPessoa < 2) { cls = 'bad'; txt = 'Pode faltar. O normal é de 2 a 4 fatias por pessoa.'; }
-  else if (fatiasPessoa > 4) { cls = 'warn'; txt = 'Vai sobrar bastante — ótimo se quiser mandar comida pra casa.'; }
+  // Alvo: 1 pizza por pessoa. Faltam ou sobram quantas pizzas para chegar lá?
+  const ideal = pessoas;
+  const dif = t.totalPizzas - ideal;
+  let cls = 'ok', txt = 'No ponto: 1 pizza por pessoa.';
+  if (t.totalPizzas === 0) {
+    cls = 'warn';
+    txt = 'Escolha os sabores abaixo. O ideal é 1 pizza por pessoa — ' + nf(ideal) +
+          (ideal > 1 ? ' pizzas' : ' pizza') + ' para ' + nf(pessoas) +
+          (pessoas > 1 ? ' pessoas.' : ' pessoa.');
+  } else if (dif <= -1) {
+    const n = Math.ceil(-dif);
+    cls = 'bad';
+    txt = (n > 1 ? 'Faltam ' : 'Falta ') + nf(n) + (n > 1 ? ' pizzas' : ' pizza') +
+          ' para dar 1 por pessoa.';
+  } else if (dif >= 1) {
+    const n = Math.floor(dif);
+    cls = 'warn';
+    txt = (n > 1 ? 'Sobram ' : 'Sobra ') + nf(n) + (n > 1 ? ' pizzas' : ' pizza') +
+          ' além de 1 por pessoa.';
+  }
 
   $('#porPessoa').innerHTML =
-    '<div><b>' + nf(fatiasPessoa, 1) + '</b><span>fatias / pessoa</span></div>' +
     '<div><b>' + nf(pizzaPessoa, 2) + '</b><span>pizza / pessoa</span></div>' +
+    '<div><b>' + nf(fatiasPessoa, 1) + '</b><span>fatias / pessoa</span></div>' +
     '<div><b>' + fmtQt(gPessoa, 'g') + '</b><span>comida / pessoa</span></div>' +
     '<div class="aviso ' + cls + '">' + txt + '</div>';
 
@@ -292,7 +308,7 @@ function fmtMassa(v) {
 }
 
 function receitaMassa(totalMassa) {
-  const perfil = PERFIS_MASSA[S.massa.perfil] || PERFIS_MASSA.italiana;
+  const perfil = RECEITAS_MASSA[S.massa.perfil] || RECEITAS_MASSA.italiana;
   const p = perfil.pct;
   const item = (id, nome, pct, comprar, sub) => ({
     id: 'massa:' + id, nome: nome, sub: sub, un: 'g', qt: totalMassa * pct, comprar: comprar,
@@ -448,15 +464,24 @@ function massaBase() {
     : t.massaTotal;
 }
 
+function receitaAtual() {
+  return RECEITAS_MASSA[S.massa.perfil] ? S.massa.perfil : 'italiana';
+}
+
 function renderMassa() {
-  const sel = $('#selPerfil');
-  if (!sel.options.length) {
-    sel.innerHTML = Object.keys(PERFIS_MASSA)
-      .map(k => '<option value="' + k + '">' + esc(PERFIS_MASSA[k].nome) + '</option>').join('');
-  }
-  sel.value = S.massa.perfil in PERFIS_MASSA ? S.massa.perfil : 'italiana';
-  const perfil = PERFIS_MASSA[sel.value];
-  $('#descPerfil').textContent = perfil.desc;
+  const chave = receitaAtual();
+  const perfil = RECEITAS_MASSA[chave];
+
+  $('#receitas').innerHTML = Object.keys(RECEITAS_MASSA).map(k => {
+    const r = RECEITAS_MASSA[k];
+    return '<button type="button" role="radio" aria-checked="' + (k === chave) + '"' +
+      ' class="receita-op' + (k === chave ? ' is-on' : '') + '" data-receita="' + k + '">' +
+      '<span class="ro-nome">' + esc(r.nome) + '</span>' +
+      '<span class="ro-sub">' + esc(r.sub) + '</span>' +
+      '<span class="ro-meta">' + esc(r.meta) + '</span>' +
+    '</button>';
+  }).join('');
+  $('#descReceita').textContent = perfil.desc;
 
   $('#inpBola').value = S.massa.bola;
   const total = massaBase();
@@ -482,15 +507,29 @@ function renderMassa() {
     '<div class="linha destaque"><span>Bolas de ' + nf(bola) + ' g</span><b>' + nf(bolas, 1) + '</b></div>' +
     '<div class="linha destaque"><span>Hidratação (água ÷ farinha)</span><b>' + nf(hidr, 0) + '%</b></div>';
 
-  $('#cronogramas').innerHTML = CRONOGRAMAS.map((c, idx) =>
-    '<details class="crono"' + (idx === 0 ? ' open' : '') + '>' +
-      '<summary>' + esc(c.nome) + ' <small>' + esc(c.resumo) + '</small></summary>' +
-      '<ol>' + c.passos.map(t => '<li>' + esc(t) + '</li>').join('') + '</ol>' +
-    '</details>').join('');
+  const temEspera = perfil.passos.some(p => p.espera);
+  $('#preparo').innerHTML =
+    (temEspera ? '<p class="legenda-espera"><i></i>Etapas em amarelo são só espera — nada para fazer.</p>' : '') +
+    '<div class="passos">' + perfil.passos.map(p =>
+      '<div class="passo' + (p.espera ? ' espera' : '') + '">' +
+        '<div class="passo-topo"><h3>' + esc(p.titulo) + '</h3>' +
+        '<span class="tempo">' + esc(p.tempo) + '</span></div>' +
+        '<p>' + esc(p.texto) + '</p>' +
+      '</div>').join('') + '</div>';
+
+  $('#dicasMassa').innerHTML =
+    '<ul>' + perfil.dicas.map(d => '<li>' + esc(d) + '</li>').join('') + '</ul>';
 }
 function sal_(total, p) { return total * p.sal; }
 
-$('#selPerfil').addEventListener('change', e => { S.massa.perfil = e.target.value; salvar(); renderMassa(); });
+$('#receitas').addEventListener('click', e => {
+  const b = e.target.closest('[data-receita]');
+  if (!b || b.dataset.receita === receitaAtual()) return;
+  S.massa.perfil = b.dataset.receita;
+  salvar();
+  renderMassa();
+  toast('Receita: ' + RECEITAS_MASSA[S.massa.perfil].nome);
+});
 $('#inpBola').addEventListener('input', e => { S.massa.bola = Math.max(1, Number(e.target.value) || 300); salvar(); renderMassa(); });
 $('#inpMassaTotal').addEventListener('input', e => { S.massa.override = Math.max(0, Number(e.target.value) || 0); salvar(); renderMassa(); });
 $('#btnSyncMassa').addEventListener('click', () => {

@@ -11,9 +11,9 @@ Tudo roda no navegador. Não tem servidor, não tem cadastro, nenhum dado sai do
 
 | Aba | O que faz |
 |---|---|
-| **Pedido** | Escolhe a quantidade de cada sabor. Mostra total de pizzas, peso total, peso de recheio e — informando o número de pessoas e as fatias por pizza — quantas fatias e quantos gramas sobram por pessoa, com um aviso de "pode faltar / equilibrado / vai sobrar". |
+| **Pedido** | Escolhe a quantidade de cada sabor. Mostra total de pizzas, peso total, peso de recheio e, informando o número de pessoas, quantas pizzas/fatias/gramas dão por cabeça. O alvo é **1 pizza por pessoa**, e o aviso diz quantas faltam ou sobram para chegar lá. |
 | **Compras** | A lista de ingredientes somada, agrupada por seção do mercado. A massa já vem quebrada no que se compra de verdade — farinha, sal e fermento, na proporção da receita escolhida na aba Massa (a água aparece só como referência). Dá para marcar o que já comprou e tocar em cada item para ver de quais sabores aquela quantidade veio. O botão **Compartilhar** manda a lista pronta pro WhatsApp. |
-| **Massa** | Calcula farinha, água, sal e fermento a partir da massa total do pedido, em duas receitas (italiana/napolitana e caseira). Mostra hidratação, quantas bolas saem e três modos de preparo. |
+| **Massa** | Três receitas completas e independentes: escolha uma e só ela aparece embaixo — ingredientes calculados a partir da massa do pedido, modo de preparo em linha do tempo (com as etapas de espera destacadas) e dicas específicas daquela receita. |
 | **Cadastro** | Cria, edita e apaga sabores (com a gramagem de cada ingrediente por pizza) e o catálogo de ingredientes. |
 
 No menu **⋯** (canto superior direito) tem exportar/importar backup em `.json` e restaurar os
@@ -122,8 +122,15 @@ antigos do cache.
 
 ## De onde vieram os números
 
-16 dos 17 sabores, as gramagens e as duas receitas de massa saíram direto da planilha original
-(abas `base` e `final`). O único acrescentado depois foi o **Morango com Nutella**.
+16 dos 17 sabores e todas as gramagens saíram direto da planilha original (abas `base` e
+`final`). O único sabor acrescentado depois foi o **Morango com Nutella**.
+
+As proporções das massas também são da planilha: a napolitana e a direta usam as linhas 76–81
+(58% farinha / 40,5% água / 1,4% sal / 0,2% fermento) e a caseira usa as linhas 58–63
+(60 / 40 / 2 / 0,12). Os tempos vêm das anotações de 12/01 e 13/01 da mesma aba. O texto do
+modo de preparo — a ordem das etapas, os porquês e as dicas — foi escrito para o app, não
+estava na planilha.
+
 Conferido: o mesmo pedido de exemplo da planilha (2 marguerita,
 2 corn bacon, 2 philadélfia, 3 banana com nutella, 2 calabresa, 2 montanella) dá os mesmos
 8.760 g totais e as mesmas quantidades por ingrediente, e a massa italiana devolve os mesmos

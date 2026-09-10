@@ -245,51 +245,113 @@ function atualizaPorPessoa() { renderPedido(); }
 
 let abertos = {};
 
+/* "Massa" é um ingrediente intermediário: no mercado o que se compra é farinha,
+   sal e fermento. Aqui ela é quebrada na receita escolhida na aba Massa. */
+function fmtMassa(v) {
+  if (v >= 1000) return nf(v / 1000, 2) + ' kg';
+  return nf(v, v < 100 ? 1 : 0) + ' g';
+}
+
+function receitaMassa(totalMassa) {
+  const perfil = PERFIS_MASSA[S.massa.perfil] || PERFIS_MASSA.italiana;
+  const p = perfil.pct;
+  const item = (id, nome, pct, comprar, sub) => ({
+    id: 'massa:' + id, nome: nome, sub: sub, un: 'g', qt: totalMassa * pct, comprar: comprar,
+    qtTxt: fmtMassa(totalMassa * pct),
+    det: [{
+      esq: perfil.nome + ' — ' + nf(pct * 100, pct < 0.01 ? 2 : 1) + '% da massa',
+      dir: fmtMassa(totalMassa * pct)
+    }]
+  });
+  return {
+    perfil: perfil,
+    itens: [
+      item('farinha',  'Farinha',                 p.farinha,  true),
+      item('sal',      'Sal',                     p.sal,      true),
+      item('fermento', 'Fermento biológico seco', p.fermento, true),
+      item('agua',     'Água',                    p.agua,     false, 'não precisa comprar')
+    ]
+  };
+}
+
+/* Monta a lista agrupada. Usada tanto pela tela quanto pelo botão Compartilhar. */
+function gruposCompras(t) {
+  const mid = idMassa();
+  const massaTotal = massaBase();
+  const catMassa = (mid && ing(mid) && ing(mid).cat) || 'Massa';
+  const ids = Object.keys(t.porIng).filter(id => t.porIng[id].total > 0 && id !== mid);
+  const grupos = [];
+
+  CATEGORIAS.concat(['(sem categoria)']).forEach(cat => {
+    const linhas = [];
+    let nota = '';
+
+    if (cat === catMassa && massaTotal > 0) {
+      const r = receitaMassa(massaTotal);
+      const bola = Math.max(1, Number(S.massa.bola) || 300);
+      nota = fmtQt(massaTotal, 'g') + ' de massa · ' + nf(massaTotal / bola, 1) +
+             ' bolas de ' + nf(bola) + ' g · ' + r.perfil.nome;
+      r.itens.forEach(x => linhas.push(x));
+    }
+
+    ids.filter(id => (((ing(id) || {}).cat) || '(sem categoria)') === cat)
+       .sort((a, b) => t.porIng[b].total - t.porIng[a].total)
+       .forEach(id => {
+         const i = ing(id) || { nome: id, un: 'g' };
+         linhas.push({
+           id: id, nome: i.nome, un: i.un, qt: t.porIng[id].total, comprar: true,
+           qtTxt: fmtQt(t.porIng[id].total, i.un),
+           det: t.porIng[id].detalhes.map(x => ({
+             esq: x.sabor + ' — ' + x.pizzas + '× ' + fmtQt(x.porPizza, i.un),
+             dir: fmtQt(x.total, i.un)
+           }))
+         });
+       });
+
+    if (linhas.length) grupos.push({ cat: cat, nota: nota, linhas: linhas });
+  });
+  return grupos;
+}
+
 function renderCompras() {
   const t = calcular();
-  const ids = Object.keys(t.porIng).filter(id => t.porIng[id].total > 0);
-
-  $('#resumoCompras').innerHTML =
-    stat(nf(ids.length), 'itens') +
-    stat(nf(t.totalPizzas), 'pizzas') +
-    stat(fmtQt(t.pesoTotal, 'g'), 'peso total');
 
   const box = $('#listaCompras');
-  if (!ids.length) {
+  if (!t.totalPizzas) {
+    $('#resumoCompras').innerHTML =
+      stat('0', 'itens') + stat('0', 'pizzas') + stat('0 g', 'peso total');
     box.innerHTML = '<p class="vazio">Escolha as pizzas na aba <b>Pedido</b> e a lista aparece aqui.</p>';
     return;
   }
 
-  let html = '';
-  CATEGORIAS.concat(['(sem categoria)']).forEach(cat => {
-    const doGrupo = ids
-      .filter(id => {
-        const i = ing(id);
-        const c = (i && i.cat) || '(sem categoria)';
-        return c === cat;
-      })
-      .sort((a, b) => t.porIng[b].total - t.porIng[a].total);
-    if (!doGrupo.length) return;
+  const grupos = gruposCompras(t);
+  const aComprar = grupos.reduce((a, g) => a + g.linhas.filter(l => l.comprar).length, 0);
 
-    html += '<p class="grupo-title">' + esc(cat) + '</p>';
-    doGrupo.forEach(id => {
-      const i = ing(id) || { nome: id, un: 'g' };
-      const d = t.porIng[id];
-      const done = !!S.comprados[id];
-      const open = !!abertos[id];
-      html += '<div class="compra' + (done ? ' done' : '') + '">' +
+  $('#resumoCompras').innerHTML =
+    stat(nf(aComprar), 'itens') +
+    stat(nf(t.totalPizzas), 'pizzas') +
+    stat(fmtQt(t.pesoTotal, 'g'), 'peso total');
+
+  box.innerHTML = grupos.map(g =>
+    '<p class="grupo-title">' + esc(g.cat) + '</p>' +
+    (g.nota ? '<p class="grupo-nota">' + esc(g.nota) + '</p>' : '') +
+    g.linhas.map(l => {
+      const done = l.comprar && !!S.comprados[l.id];
+      const open = !!abertos[l.id];
+      return '<div class="compra' + (done ? ' done' : '') + (l.comprar ? '' : ' info') + '">' +
         '<div class="compra-head">' +
-          '<button type="button" class="chk' + (done ? ' on' : '') + '" data-chk="' + id + '" aria-label="Marcar como comprado">✓</button>' +
-          '<span class="nome" data-det="' + id + '">' + esc(i.nome) + '</span>' +
-          '<span class="qt" data-det="' + id + '">' + fmtQt(d.total, i.un) + '</span>' +
+          (l.comprar
+            ? '<button type="button" class="chk' + (done ? ' on' : '') + '" data-chk="' + l.id + '" aria-label="Marcar como comprado">✓</button>'
+            : '<span class="chk-vazio" aria-hidden="true"></span>') +
+          '<span class="nome" data-det="' + l.id + '">' + esc(l.nome) +
+            (l.sub ? '<small>' + esc(l.sub) + '</small>' : '') + '</span>' +
+          '<span class="qt" data-det="' + l.id + '">' + esc(l.qtTxt) + '</span>' +
         '</div>' +
-        (open ? '<div class="compra-det">' + d.detalhes.map(x =>
-            '<div><span>' + esc(x.sabor) + ' — ' + x.pizzas + '× ' + fmtQt(x.porPizza, i.un) + '</span><b>' + fmtQt(x.total, i.un) + '</b></div>'
-          ).join('') + '</div>' : '') +
+        (open && l.det.length ? '<div class="compra-det">' + l.det.map(d =>
+          '<div><span>' + esc(d.esq) + '</span><b>' + esc(d.dir) + '</b></div>').join('') + '</div>' : '') +
       '</div>';
-    });
-  });
-  box.innerHTML = html;
+    }).join('')
+  ).join('');
 }
 
 $('#listaCompras').addEventListener('click', e => {
@@ -313,18 +375,15 @@ $('#btnDesmarcar').addEventListener('click', () => {
 
 $('#btnCompartilhar').addEventListener('click', async () => {
   const t = calcular();
-  const ids = Object.keys(t.porIng).filter(id => t.porIng[id].total > 0);
-  if (!ids.length) { toast('Sua lista está vazia'); return; }
+  if (!t.totalPizzas) { toast('Sua lista está vazia'); return; }
 
   let txt = '🍕 LISTA DE COMPRAS\n';
   txt += t.totalPizzas + ' pizzas para ' + S.pessoas + ' pessoas\n\n';
-  CATEGORIAS.concat(['(sem categoria)']).forEach(cat => {
-    const g = ids.filter(id => (((ing(id) || {}).cat) || '(sem categoria)') === cat);
-    if (!g.length) return;
-    txt += cat.toUpperCase() + '\n';
-    g.sort((a, b) => t.porIng[b].total - t.porIng[a].total).forEach(id => {
-      const i = ing(id) || { nome: id, un: 'g' };
-      txt += '- ' + i.nome + ': ' + fmtQt(t.porIng[id].total, i.un) + '\n';
+  gruposCompras(t).forEach(g => {
+    txt += g.cat.toUpperCase() + '\n';
+    if (g.nota) txt += '(' + g.nota.replace(/ · /g, ', ') + ')\n';
+    g.linhas.forEach(l => {
+      txt += '- ' + l.nome + ': ' + l.qtTxt + (l.comprar ? '' : ' (' + (l.sub || 'informativo') + ')') + '\n';
     });
     txt += '\n';
   });

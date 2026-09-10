@@ -16,9 +16,17 @@ Tudo roda no navegador. Não tem servidor, não tem cadastro, nenhum dado sai do
 | **Massa** | Três receitas completas e independentes: escolha uma e só ela aparece embaixo — ingredientes calculados a partir da massa do pedido, modo de preparo em linha do tempo (com as etapas de espera destacadas) e dicas específicas daquela receita. |
 | **Cadastro** | Cria, edita e apaga sabores (com a gramagem de cada ingrediente por pizza) e o catálogo de ingredientes. |
 
-No menu **⋯** (canto superior direito) tem buscar atualização do app, gerar o `catalogo.json`,
-exportar/importar backup em `.json` e restaurar os
-sabores originais.
+O menu **⋯** (canto superior direito) é escrito para quem só quer fazer pizza, não para quem
+programa:
+
+| Item | O que faz de verdade |
+|---|---|
+| 📤 Baixar meus sabores | gera o `catalogo.json` com os sabores que não vêm de fábrica |
+| 📥 Receber sabores de um arquivo | mescla um `.json` recebido, sem apagar o que já existe |
+| 🔄 Atualizar o app | revalida o service worker, limpa o cache e recarrega |
+| 💾 Salvar uma cópia de tudo | exporta o estado inteiro (`localStorage`) |
+| ♻️ Restaurar uma cópia salva | importa e **substitui** o estado |
+| 🗑️ Voltar tudo ao começo | volta ao `data.js` de fábrica |
 
 ## Rodando na sua máquina
 
@@ -55,7 +63,7 @@ navegador, e funciona sem internet.
 Sempre que mudar algum arquivo, incremente a versão do cache no topo de `sw.js`:
 
 ```js
-const VERSAO = 'pizza-v8';   // era pizza-v7
+const VERSAO = 'pizza-v10';  // era pizza-v9
 ```
 
 ### "Publiquei mas o celular continua na versão antiga"
@@ -67,11 +75,11 @@ validade. Ou seja: pode demorar.
 
 Na ordem, do mais rápido para o mais bruto:
 
-1. No app, **⋯ → 🔄 Buscar atualização do app**. Ele apaga o cache, revalida o
+1. No app, **⋯ → 🔄 Atualizar o app**. Ele apaga o cache, revalida o
    service worker e recarrega. Resolve na hora, sem perder seus dados.
-2. Confira no rodapé do mesmo menu ⋯ qual catálogo está carregado
-   (`Catálogo v2 · 17 sabores`). Se o número bateu com o `CATALOGO_VERSAO` do
-   `data.js` que você publicou, atualizou.
+2. Confira o rodapé do mesmo menu ⋯, que diz o que este aparelho está rodando
+   (`17 sabores neste aparelho · funciona sem internet · versão 2.1`). O primeiro número é o
+   `CATALOGO_VERSAO` do `data.js`; o segundo, a `versao` do `catalogo.json`.
 3. Confirme que o arquivo no ar é mesmo o novo, abrindo direto no navegador:
    `https://SEU-USUARIO.github.io/SEU-REPO/assets/js/data.js` — procure o
    `CATALOGO_VERSAO` no topo. Se lá ainda estiver o antigo, o problema é o upload
@@ -79,7 +87,7 @@ Na ordem, do mais rápido para o mais bruto:
 4. Veja em **Actions**, no GitHub, se o build do Pages terminou (leva 1–2 min).
    Arrastar arquivos pela web cria um commit; sem commit, nada sobe.
 5. Último caso: desinstale a PWA da tela de início e adicione de novo. Isso apaga
-   os dados salvos, então **exporte o backup antes** (⋯ → Exportar).
+   os dados salvos, então **salve uma cópia antes** (⋯ → 💾 Salvar uma cópia de tudo).
 
 > Ao arrastar arquivos pelo site do GitHub, confira que você substituiu a pasta
 > `assets` inteira, e não só os arquivos da raiz. É comum atualizar o `index.html`
@@ -102,7 +110,7 @@ Para mudar só no seu aparelho, use a aba **Cadastro**.
 
 ## Passando sabores de uma pessoa para outra
 
-São dois caminhos, e os dois só **acrescentam** — nunca sobrescrevem um sabor que a pessoa
+São três caminhos, e todos só **acrescentam** — nunca sobrescrevem um sabor que a pessoa
 editou nem trazem de volta o que ela apagou de propósito.
 
 ### 1. Link no WhatsApp (pessoa a pessoa)
@@ -117,7 +125,16 @@ caracteres, cabe folgado numa mensagem.
 Se a pessoa já tiver um sabor com aquele nome, o botão vira **Adicionar como cópia** — nada é
 sobrescrito.
 
-### 2. `catalogo.json` (para todo mundo de uma vez)
+### 2. Arquivo de sabores (quando são vários)
+
+Quem criou vários sabores usa **⋯ → 📤 Baixar meus sabores** e manda o arquivo. Quem recebe
+usa **⋯ → 📥 Receber sabores de um arquivo** — os sabores dele continuam intactos, só entra o
+que faltava.
+
+É o mesmo arquivo dos dois lados, e é o mesmo que você publica no site (abaixo). Por isso ele
+se chama `catalogo.json`: assim você pode subir direto o que te mandaram, sem renomear nada.
+
+### 3. `catalogo.json` (para todo mundo de uma vez)
 
 O app baixa o `catalogo.json` da raiz do site toda vez que abre e acrescenta o que faltar.
 É assim que um sabor novo chega em todos os aparelhos sem ninguém precisar mandar link.
@@ -125,12 +142,24 @@ O app baixa o `catalogo.json` da raiz do site toda vez que abre e acrescenta o q
 Para publicar um sabor que alguém te mandou:
 
 1. Adicione o sabor no seu app (pelo link que a pessoa mandou, ou na mão pela aba Cadastro).
-2. Menu **⋯ → 📦 Gerar catalogo.json**. Ele monta o arquivo com tudo que não vem de fábrica,
-   já com a versão incrementada.
-3. Suba o arquivo na raiz do repositório, junto do `index.html`.
+2. Menu **⋯ → 📤 Baixar meus sabores**. Antes de montar o arquivo ele busca a versão que está
+   no ar e gera a seguinte, então o número sai certo mesmo que você gere de um aparelho
+   desatualizado.
+3. Suba o arquivo na raiz do repositório, junto do `index.html` — substituindo o que estava lá.
 
-O campo `versao` é o que dispara a atualização nos celulares. Se você editar o arquivo na mão,
-**lembre de subir esse número** — sem isso ninguém recebe.
+Pronto: na próxima vez que cada pessoa abrir o app, o sabor aparece sozinho, com um aviso na
+tela. Quem já abriu não recebe duas vezes.
+
+O campo `versao` é o gatilho: o app só mescla se o número for **maior** que o da última vez.
+Se você editar o arquivo na mão, lembre de subir esse número.
+
+Duas coisas que valem saber sobre o arquivo gerado:
+
+- Ele leva **todos** os seus sabores que não vêm de fábrica, não só o último. Se tiver algum
+  que você não quer publicar, apague do arquivo antes de subir (ou apague do app).
+- Edição em sabor de fábrica **não** entra. Se você mudou o queijo da Marguerita, essa mudança
+  fica só no seu aparelho — a mesclagem nunca sobrescreve o sabor de ninguém. Para mudar a
+  Marguerita para todo mundo, o caminho é o `data.js`.
 
 ### Acrescentando um sabor direto no código
 

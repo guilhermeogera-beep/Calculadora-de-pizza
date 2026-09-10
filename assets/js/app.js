@@ -950,8 +950,9 @@ async function sincronizarCatalogo() {
 $('#btnMenu').addEventListener('click', () => {
   const sw = 'serviceWorker' in navigator && navigator.serviceWorker.controller;
   $('#versaoApp').textContent =
-    'Catálogo v' + CATALOGO_VERSAO + ' · ' + S.sabores.length + ' sabores · ' +
-    (sw ? 'modo offline ativo' : 'modo offline não ativo');
+    S.sabores.length + ' sabores neste aparelho · ' +
+    (sw ? 'funciona sem internet' : 'ainda precisa de internet') +
+    ' · versão ' + CATALOGO_VERSAO + '.' + (Number(S.catalogoRemoto) || 0);
   $('#dlgMenu').showModal();
 });
 
@@ -983,10 +984,10 @@ function baixar(nome, conteudo) {
 }
 
 /* Junta tudo que não veio do data.js num catalogo.json pronto para publicar. */
-$('#btnGerarCatalogo').addEventListener('click', () => {
+$('#btnGerarCatalogo').addEventListener('click', async () => {
   const sabores = S.sabores.filter(s => !SEED_SABORES.some(x => x.id === s.id));
   if (!sabores.length) {
-    toast('Nenhum sabor além dos que já vêm no app');
+    toast('Você ainda não criou nenhum sabor');
     return;
   }
   const usados = {};
@@ -994,16 +995,32 @@ $('#btnGerarCatalogo').addEventListener('click', () => {
   const ingredientes = S.ingredientes.filter(i =>
     usados[i.id] && !SEED_INGREDIENTES.some(x => x.id === i.id));
 
+  /* A nova versão tem que ser maior que a que está no ar, senão ninguém recebe.
+     Não dá para confiar só no que este aparelho lembra: se você gerar de um
+     aparelho desatualizado (ou que nunca abriu o app), o número sairia baixo
+     demais e o arquivo seria ignorado por todo mundo. Por isso vai buscar. */
+  let publicada = Number(S.catalogoRemoto) || 0;
+  try {
+    const r = await fetch('./catalogo.json', { cache: 'no-cache' });
+    if (r.ok) {
+      const d = await r.json();
+      publicada = Math.max(publicada, Number(d.versao) || 0);
+    }
+  } catch (e) { /* offline ou ainda não publicado: usa o que sabemos */ }
+  const versao = publicada + 1;
+
   baixar('catalogo.json', JSON.stringify({
-    _leiame: 'Catalogo compartilhado. Suba a versao em 1 sempre que mexer aqui, ' +
-             'senao quem ja abriu o app nao recebe as novidades.',
-    versao: (Number(S.catalogoRemoto) || 0) + 1,
+    _leiame: 'Sabores da Calculadora de Pizza. Para receber: abra o app, toque nos tres ' +
+             'pontinhos e escolha "Receber sabores de um arquivo". Para publicar para todo ' +
+             'mundo: suba este arquivo na raiz do site (o campo versao ja veio certo).',
+    versao: versao,
     ingredientes: ingredientes,
     sabores: sabores.map(s => ({ id: s.id, nome: s.nome, tipo: s.tipo, itens: s.itens }))
   }, null, 2));
 
   $('#dlgMenu').close();
-  toast(sabores.length + (sabores.length > 1 ? ' sabores' : ' sabor') + ' no arquivo — publique na raiz do site');
+  toast('Arquivo salvo com ' + sabores.length +
+        (sabores.length > 1 ? ' sabores' : ' sabor') + ' — agora é só enviar');
 });
 
 $('#btnExportar').addEventListener('click', () => {
@@ -1014,6 +1031,37 @@ $('#btnExportar').addEventListener('click', () => {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   toast('Backup gerado');
+});
+
+/* Junta os sabores de um arquivo aos que a pessoa já tem, sem apagar nada.
+   Aceita tanto o arquivo de "Baixar meus sabores" quanto uma cópia completa. */
+$('#btnJuntar').addEventListener('click', () => $('#fileJuntar').click());
+$('#fileJuntar').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    let dados;
+    try { dados = JSON.parse(fr.result); } catch (err) { dados = null; }
+    if (!dados || (!Array.isArray(dados.sabores) && !Array.isArray(dados.ingredientes))) {
+      toast('Esse arquivo não tem sabores dentro');
+      return;
+    }
+    // pedir para receber é intenção explícita: o que foi apagado antes pode voltar
+    const chegando = (dados.sabores || []).map(s => s && s.id).filter(Boolean);
+    if (S.removidos && Array.isArray(S.removidos.sabores)) {
+      S.removidos.sabores = S.removidos.sabores.filter(id => chegando.indexOf(id) === -1);
+    }
+    const r = mesclarListas(dados.ingredientes, dados.sabores);
+    salvar();
+    $('#dlgMenu').close();
+    render();
+    toast(r.sabores || r.ingredientes
+      ? '🍕 ' + frase(r)
+      : 'Você já tinha todos esses sabores');
+  };
+  fr.readAsText(f);
 });
 
 $('#btnImportar').addEventListener('click', () => $('#fileImport').click());
@@ -1062,7 +1110,8 @@ window.addEventListener('beforeinstallprompt', e => {
   if ($('#btnInstalar')) return;
   const b = document.createElement('button');
   b.type = 'button'; b.className = 'menu-item'; b.id = 'btnInstalar';
-  b.textContent = '📲 Instalar na tela de início';
+  b.innerHTML = '<span class="mi-tit">📲 Instalar na tela de início</span>' +
+    '<span class="mi-sub">Coloca um ícone junto dos seus outros aplicativos. Abre em tela cheia e funciona sem internet.</span>';
   b.addEventListener('click', async () => {
     if (!promptInstalar) return;
     promptInstalar.prompt();

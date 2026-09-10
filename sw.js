@@ -1,6 +1,6 @@
 /* Service worker - app shell offline.
    Troque a versão sempre que publicar mudanças, para o app atualizar nos celulares. */
-const VERSAO = 'pizza-v8';
+const VERSAO = 'pizza-v10';
 
 const ARQUIVOS = [
   './',

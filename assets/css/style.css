@@ -351,9 +351,12 @@ dialog h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var
 .menu-list{display:flex;flex-direction:column;gap:8px}
 .menu-item{
   text-align:left;background:var(--bg-soft);border:1px solid var(--line);
-  border-radius:10px;padding:14px;font-size:15px;
+  border-radius:10px;padding:13px 14px;font-size:15px;
+  display:flex;flex-direction:column;gap:3px;
 }
-.menu-item.danger{color:var(--red)}
+.menu-item .mi-tit{font-weight:600}
+.menu-item .mi-sub{font-size:12.5px;line-height:1.4;color:var(--muted);font-weight:400}
+.menu-item.danger .mi-tit{color:var(--red)}
 #versaoApp{text-align:center;margin-top:14px;font-size:12px}
 
 /* ---------- toast ---------- */

@@ -186,14 +186,34 @@
   <form method="dialog">
     <h2>Opções</h2>
     <div class="menu-list">
-      <button type="button" class="menu-item" id="btnAtualizar">🔄 Buscar atualização do app</button>
-      <button type="button" class="menu-item" id="btnGerarCatalogo">📦 Gerar catalogo.json (para publicar)</button>
-      <button type="button" class="menu-item" id="btnExportar">⬇️ Exportar dados (backup .json)</button>
-      <button type="button" class="menu-item" id="btnImportar">⬆️ Importar backup</button>
-      <button type="button" class="menu-item danger" id="btnReset">↺ Restaurar sabores originais</button>
+      <button type="button" class="menu-item" id="btnGerarCatalogo">
+        <span class="mi-tit">📤 Baixar meus sabores</span>
+        <span class="mi-sub">Salva um arquivo com os sabores que você criou. É só mandar pra outra pessoa, que ela consegue colocar no app dela.</span>
+      </button>
+      <button type="button" class="menu-item" id="btnJuntar">
+        <span class="mi-tit">📥 Receber sabores de um arquivo</span>
+        <span class="mi-sub">Alguém te mandou um arquivo de sabores? Abra ele aqui. Os seus continuam do jeito que estão.</span>
+      </button>
+      <button type="button" class="menu-item" id="btnAtualizar">
+        <span class="mi-tit">🔄 Atualizar o app</span>
+        <span class="mi-sub">Procura a versão mais nova. Use se alguém avisou que mudou alguma coisa e você não está vendo.</span>
+      </button>
+      <button type="button" class="menu-item" id="btnExportar">
+        <span class="mi-tit">💾 Salvar uma cópia de tudo</span>
+        <span class="mi-sub">Guarda tudo num arquivo: sabores, pedido e ajustes. Bom antes de trocar de celular.</span>
+      </button>
+      <button type="button" class="menu-item" id="btnImportar">
+        <span class="mi-tit">♻️ Restaurar uma cópia salva</span>
+        <span class="mi-sub">Traz de volta uma cópia que você salvou antes. Atenção: substitui o que está aqui agora.</span>
+      </button>
+      <button type="button" class="menu-item danger" id="btnReset">
+        <span class="mi-tit">🗑️ Voltar tudo ao começo</span>
+        <span class="mi-sub">Apaga os sabores que você criou e volta para a lista original do app.</span>
+      </button>
     </div>
     <p class="hint" id="versaoApp"></p>
     <input type="file" id="fileImport" accept="application/json,.json" hidden>
+    <input type="file" id="fileJuntar" accept="application/json,.json" hidden>
     <div class="dlg-actions">
       <span class="grow"></span>
       <button type="button" class="btn ghost" data-close>Fechar</button>

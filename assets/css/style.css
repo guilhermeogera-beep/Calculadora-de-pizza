@@ -149,6 +149,25 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   padding:10px 12px;
 }
 .row.on{border-color:var(--accent);background:var(--accent-soft)}
+
+/* linha do pedido: a moldura passa para o .pizza, para o detalhe caber dentro dela */
+.pizza{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.pizza.on{border-color:var(--accent);background:var(--accent-soft)}
+.pizza .row{background:none;border:0;border-radius:0}
+.pizza .row-main{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pizza .row-main:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+.seta{display:inline-block;transition:transform .18s;font-size:15px;line-height:1;
+  color:var(--accent);vertical-align:-1px;margin-left:2px}
+.pizza.aberta .seta{transform:rotate(180deg)}
+.pizza-det{
+  border-top:1px dashed var(--line);padding:10px 12px;
+  font-size:13px;color:var(--muted);background:rgba(0,0,0,.18);
+}
+.pizza-det div{display:flex;justify-content:space-between;gap:10px;padding:3px 0}
+.pizza-det div>span{min-width:0;overflow-wrap:break-word}
+.pizza-det div>b{white-space:nowrap;color:var(--text);font-weight:600}
+.pizza-det .tot{border-top:1px solid var(--line);margin-top:6px;padding-top:7px}
+.pizza-det .tot b{color:var(--gold)}
 .row-main{flex:1;min-width:0}
 /* nomes longos ("Fraldinha com gorgonzola") quebram em duas linhas em vez de virar
    reticências — em 320-360px o ellipsis escondia parte do nome do sabor */
@@ -289,8 +308,11 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 /* Listas em duas colunas no desktop, para não sobrar tanto vazio dos lados.
    A lista de compras fica em coluna única de propósito: ela tem títulos de seção. */
 @media (min-width:820px){
+  /* align-items:start — sem isso, abrir os ingredientes de uma pizza
+     esticava o cartão vizinho até a mesma altura, com um vão vazio embaixo */
   #listaPedido,#listaSabores,#listaIngredientes{
-    display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start;
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;
+    align-content:start;align-items:start;
   }
   .row:hover{border-color:var(--muted)}
   .compra-head{cursor:pointer}

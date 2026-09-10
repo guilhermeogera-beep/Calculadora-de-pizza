@@ -11,7 +11,7 @@ Tudo roda no navegador. Não tem servidor, não tem cadastro, nenhum dado sai do
 
 | Aba | O que faz |
 |---|---|
-| **Pedido** | Escolhe a quantidade de cada sabor. Mostra total de pizzas, peso total, peso de recheio e, informando o número de pessoas, quantas pizzas/fatias/gramas dão por cabeça. O alvo é **1 pizza por pessoa**, e o aviso diz quantas faltam ou sobram para chegar lá. |
+| **Pedido** | Escolhe a quantidade de cada sabor, e tocando no nome abre os ingredientes daquela pizza com as gramagens. Mostra total de pizzas, peso total, peso de recheio e, informando o número de pessoas, quantas pizzas/fatias/gramas dão por cabeça. O alvo é **1 pizza por pessoa**, e o aviso diz quantas faltam ou sobram para chegar lá. |
 | **Compras** | A lista de ingredientes somada, agrupada por seção do mercado. A massa já vem quebrada no que se compra de verdade — farinha, sal e fermento, na proporção da receita escolhida na aba Massa (a água aparece só como referência). Dá para marcar o que já comprou e tocar em cada item para ver de quais sabores aquela quantidade veio. O botão **Compartilhar** manda a lista pronta pro WhatsApp. |
 | **Massa** | Três receitas completas e independentes: escolha uma e só ela aparece embaixo — ingredientes calculados a partir da massa do pedido, modo de preparo em linha do tempo (com as etapas de espera destacadas) e dicas específicas daquela receita. |
 | **Cadastro** | Cria, edita e apaga sabores (com a gramagem de cada ingrediente por pizza) e o catálogo de ingredientes. |
@@ -55,7 +55,7 @@ navegador, e funciona sem internet.
 Sempre que mudar algum arquivo, incremente a versão do cache no topo de `sw.js`:
 
 ```js
-const VERSAO = 'pizza-v7';   // era pizza-v6
+const VERSAO = 'pizza-v8';   // era pizza-v7
 ```
 
 ### "Publiquei mas o celular continua na versão antiga"

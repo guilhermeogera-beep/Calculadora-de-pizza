@@ -208,6 +208,8 @@ function render() {
 
 /* ============================= ABA: PEDIDO ============================= */
 
+let abertosPedido = {};
+
 function renderPedido() {
   const t = calcular();
 
@@ -260,16 +262,37 @@ function renderPedido() {
 
   box.innerHTML = lista.map(s => {
     const q = Number(S.pedido[s.id]) || 0;
-    return '<div class="row' + (q > 0 ? ' on' : '') + '">' +
-      '<div class="row-main"><span class="nome">' + esc(s.nome) +
-        (s.tipo === 'doce' ? '<span class="tag doce">doce</span>' : '') + '</span>' +
-        '<span class="sub">' + fmtQt(pesoSabor(s), 'g') + ' por pizza' +
-        (q > 0 ? ' &middot; total ' + fmtQt(pesoSabor(s) * q, 'g') : '') + '</span></div>' +
-      '<div class="qtd">' +
-        '<button type="button" data-ped="' + s.id + '" data-d="-1" aria-label="Menos">−</button>' +
-        '<span class="n">' + q + '</span>' +
-        '<button type="button" class="plus" data-ped="' + s.id + '" data-d="1" aria-label="Mais">+</button>' +
-      '</div></div>';
+    const aberta = !!abertosPedido[s.id];
+    const peso = pesoSabor(s);
+    const itens = Object.keys(s.itens || {});
+    return '<div class="pizza' + (q > 0 ? ' on' : '') + (aberta ? ' aberta' : '') + '">' +
+      '<div class="row">' +
+        '<div class="row-main" data-abrir="' + s.id + '" role="button" tabindex="0"' +
+          ' aria-expanded="' + aberta + '">' +
+          '<span class="nome">' + esc(s.nome) +
+            (s.tipo === 'doce' ? '<span class="tag doce">doce</span>' : '') + '</span>' +
+          '<span class="sub">' + fmtQt(peso, 'g') + ' por pizza' +
+            (q > 0 ? ' &middot; total ' + fmtQt(peso * q, 'g') : '') +
+            ' <span class="seta">▾</span></span>' +
+        '</div>' +
+        '<div class="qtd">' +
+          '<button type="button" data-ped="' + s.id + '" data-d="-1" aria-label="Menos">−</button>' +
+          '<span class="n">' + q + '</span>' +
+          '<button type="button" class="plus" data-ped="' + s.id + '" data-d="1" aria-label="Mais">+</button>' +
+        '</div>' +
+      '</div>' +
+      (aberta ? '<div class="pizza-det">' +
+        (itens.length
+          ? itens.map(iid => {
+              const i = ing(iid) || { nome: iid, un: 'g' };
+              return '<div><span>' + esc(i.nome) + '</span><b>' + fmtQt(s.itens[iid], i.un) + '</b></div>';
+            }).join('')
+          : '<div><span>Nenhum ingrediente cadastrado neste sabor.</span><b></b></div>') +
+        '<div class="tot"><span>Total por pizza</span><b>' + fmtQt(peso, 'g') + '</b></div>' +
+        (q > 0 ? '<div class="tot"><span>' + q + (q > 1 ? ' pizzas' : ' pizza') +
+                 '</span><b>' + fmtQt(peso * q, 'g') + '</b></div>' : '') +
+      '</div>' : '') +
+    '</div>';
   }).join('');
 }
 
@@ -278,13 +301,32 @@ function stat(valor, rotulo) {
 }
 
 $('#listaPedido').addEventListener('click', e => {
+  // os botões +/- vêm primeiro: eles ficam fora do .row-main, então não conflitam
   const b = e.target.closest('[data-ped]');
-  if (!b) return;
-  const id = b.dataset.ped;
-  const atual = Number(S.pedido[id]) || 0;
-  const novo = Math.max(0, atual + Number(b.dataset.d));
-  if (novo) S.pedido[id] = novo; else delete S.pedido[id];
-  salvar();
+  if (b) {
+    const id = b.dataset.ped;
+    const atual = Number(S.pedido[id]) || 0;
+    const novo = Math.max(0, atual + Number(b.dataset.d));
+    if (novo) S.pedido[id] = novo; else delete S.pedido[id];
+    salvar();
+    renderPedido();
+    return;
+  }
+  const a = e.target.closest('[data-abrir]');
+  if (a) {
+    const id = a.dataset.abrir;
+    if (abertosPedido[id]) delete abertosPedido[id]; else abertosPedido[id] = true;
+    renderPedido();
+  }
+});
+
+$('#listaPedido').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const a = e.target.closest('[data-abrir]');
+  if (!a) return;
+  e.preventDefault();
+  const id = a.dataset.abrir;
+  if (abertosPedido[id]) delete abertosPedido[id]; else abertosPedido[id] = true;
   renderPedido();
 });
 

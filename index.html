@@ -193,10 +193,12 @@
   <form method="dialog">
     <h2>Opções</h2>
     <div class="menu-list">
+      <button type="button" class="menu-item" id="btnAtualizar">🔄 Buscar atualização do app</button>
       <button type="button" class="menu-item" id="btnExportar">⬇️ Exportar dados (backup .json)</button>
       <button type="button" class="menu-item" id="btnImportar">⬆️ Importar backup</button>
       <button type="button" class="menu-item danger" id="btnReset">↺ Restaurar sabores originais</button>
     </div>
+    <p class="hint" id="versaoApp"></p>
     <input type="file" id="fileImport" accept="application/json,.json" hidden>
     <div class="dlg-actions">
       <span class="grow"></span>

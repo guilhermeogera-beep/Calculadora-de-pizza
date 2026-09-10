@@ -51,6 +51,13 @@ button{cursor:pointer}
 
 main{max-width:640px;margin:0 auto;padding:14px 14px 8px}
 
+/* Desktop: usa a largura disponível em vez de deixar um tubo estreito no meio. */
+@media (min-width:820px){
+  main{max-width:900px}
+  /* conteúdo de leitura não deve esticar junto */
+  #view-massa .card,#view-massa .crono{max-width:620px;margin-left:auto;margin-right:auto}
+}
+
 /* ---------- cards / lists ---------- */
 .card{
   background:var(--surface);
@@ -71,15 +78,20 @@ main{max-width:640px;margin:0 auto;padding:14px 14px 8px}
   background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
   padding:12px 10px;text-align:center;
 }
-.stat b{display:block;font-size:20px;line-height:1.2;color:var(--gold)}
+.stat{min-width:0}
+/* encolhe em telas estreitas para "8,05 kg" não quebrar em duas linhas */
+.stat b{display:block;font-size:clamp(15px,5.2vw,20px);line-height:1.2;color:var(--gold)}
 .stat span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
 .stat.wide{grid-column:1/-1;text-align:left;display:flex;align-items:center;gap:10px}
 .stat.wide b{font-size:17px;color:var(--text)}
 
 /* ---------- toolbar ---------- */
-.toolbar{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+/* wrap: em 320px "Compartilhar lista" + "Desmarcar tudo" não cabiam na mesma linha
+   e empurravam a página 7px para fora da viewport */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+.toolbar .btn{flex:1 1 auto}
 .search{
-  flex:1;min-width:0;background:var(--bg-soft);border:1px solid var(--line);
+  flex:1 1 160px;min-width:0;background:var(--bg-soft);border:1px solid var(--line);
   border-radius:10px;padding:10px 12px;
 }
 .search::placeholder{color:var(--muted)}
@@ -109,12 +121,15 @@ main{max-width:640px;margin:0 auto;padding:14px 14px 8px}
   border-radius:10px;font-size:22px;line-height:1;color:var(--text);
 }
 .stepper input{flex:1;min-width:0;text-align:center;font-weight:700;font-size:18px;
-  background:var(--bg-soft);border:1px solid var(--line);border-radius:10px;padding:10px}
+  background:var(--bg-soft);border:1px solid var(--line);border-radius:10px;padding:10px 4px}
 input[type=number]{-moz-appearance:textfield}
 input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 
-.pessoas-card{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* Empilhado por padrão: com duas colunas, o input do stepper sobrava só ~24px em 320-375px
+   e o número digitado ("200 pessoas") ficava cortado. Lado a lado só a partir de 420px. */
+.pessoas-card{display:grid;grid-template-columns:1fr;gap:12px}
+@media (min-width:420px){ .pessoas-card{grid-template-columns:1fr 1fr} }
 .pessoas-card .por-pessoa{grid-column:1/-1}
 .por-pessoa{
   border-top:1px dashed var(--line);padding-top:12px;margin-top:2px;
@@ -135,7 +150,9 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 }
 .row.on{border-color:var(--accent);background:var(--accent-soft)}
 .row-main{flex:1;min-width:0}
-.row-main .nome{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* nomes longos ("Fraldinha com gorgonzola") quebram em duas linhas em vez de virar
+   reticências — em 320-360px o ellipsis escondia parte do nome do sabor */
+.row-main .nome{font-weight:600;display:block;overflow-wrap:break-word}
 .row-main .sub{font-size:12px;color:var(--muted)}
 .qtd{display:flex;align-items:center;gap:6px}
 .qtd button{
@@ -151,19 +168,27 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 /* ---------- compras ---------- */
 .grupo-title{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:14px 0 6px}
 .grupo-title:first-child{margin-top:0}
+.grupo-nota{font-size:12px;color:var(--muted);margin:-2px 0 8px;line-height:1.35}
+#view-compras .hint{margin-bottom:16px}
 .compra{
   background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
   overflow:hidden;
 }
 .compra-head{display:flex;align-items:center;gap:12px;padding:12px}
 .chk{
-  width:26px;height:26px;flex:none;border-radius:8px;border:2px solid var(--line);
+  width:32px;height:32px;flex:none;border-radius:8px;border:2px solid var(--line);
   background:transparent;display:flex;align-items:center;justify-content:center;
-  font-size:15px;color:transparent;
+  font-size:17px;color:transparent;
 }
 .chk.on{background:var(--green);border-color:var(--green);color:#16110f}
+.chk-vazio{width:32px;flex:none}
 .compra.done .compra-head .nome{text-decoration:line-through;color:var(--muted)}
-.compra .nome{flex:1;font-weight:600}
+.compra.done .compra-head .nome small{text-decoration:none}
+.compra .nome{flex:1;min-width:0;font-weight:600;overflow-wrap:break-word}
+.compra .nome small{display:block;font-size:11px;font-weight:400;color:var(--muted)}
+/* linha só informativa (água da massa): sem caixa de marcar */
+.compra.info{background:transparent;border-style:dashed}
+.compra.info .nome,.compra.info .qt{color:var(--muted);font-weight:600}
 .compra .qt{font-weight:700;color:var(--gold);white-space:nowrap}
 .compra-det{border-top:1px solid var(--line);padding:10px 12px;font-size:13px;color:var(--muted);background:var(--bg-soft)}
 .compra-det div{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
@@ -207,6 +232,23 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .tab.is-active{color:var(--accent)}
 .tab.is-active .tab-ic{filter:none;opacity:1}
 
+/* Telas largas: os 4 botões ficavam esticados de ponta a ponta numa barra de 1900px. */
+@media (min-width:720px){
+  .tabbar{grid-template-columns:repeat(4,150px);justify-content:center}
+  .tab{padding:10px 4px 12px;font-size:12px}
+  .tab:hover{color:var(--text)}
+  .tab.is-active:hover{color:var(--accent)}
+}
+/* Listas em duas colunas no desktop, para não sobrar tanto vazio dos lados.
+   A lista de compras fica em coluna única de propósito: ela tem títulos de seção. */
+@media (min-width:820px){
+  #listaPedido,#listaSabores,#listaIngredientes{
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start;
+  }
+  .row:hover{border-color:var(--muted)}
+  .compra-head{cursor:pointer}
+}
+
 /* ---------- dialogs ---------- */
 dialog{
   border:0;padding:0;background:transparent;color:var(--text);
@@ -227,7 +269,7 @@ dialog h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var
 .dlg-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
 .sabor-itens{display:flex;flex-direction:column;gap:8px}
 .item-linha{display:flex;align-items:center;gap:8px;background:var(--bg-soft);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
-.item-linha .nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
+.item-linha .nome{flex:1;min-width:0;overflow-wrap:break-word;font-size:15px}
 .item-linha input{width:80px;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 8px}
 .item-linha .un{color:var(--muted);font-size:13px;width:22px}
 .item-linha .del{background:none;border:0;color:var(--red);font-size:19px;padding:0 4px}
@@ -243,6 +285,7 @@ dialog h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var
   border-radius:10px;padding:14px;font-size:15px;
 }
 .menu-item.danger{color:var(--red)}
+#versaoApp{text-align:center;margin-top:14px;font-size:12px}
 
 /* ---------- toast ---------- */
 .toast{

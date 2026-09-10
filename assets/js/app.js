@@ -12,8 +12,10 @@ const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 function estadoPadrao() {
   return {
     v: 1,
+    catalogo: CATALOGO_VERSAO,
     ingredientes: JSON.parse(JSON.stringify(SEED_INGREDIENTES)),
     sabores: JSON.parse(JSON.stringify(SEED_SABORES)),
+    removidos: { sabores: [], ingredientes: [] },
     pedido: {},
     pessoas: 10,
     fatias: 8,
@@ -22,16 +24,53 @@ function estadoPadrao() {
   };
 }
 
-let S;
+let S, salvoBruto = null;
 try {
   const raw = localStorage.getItem(KEY);
-  S = raw ? Object.assign(estadoPadrao(), JSON.parse(raw)) : estadoPadrao();
+  salvoBruto = raw ? JSON.parse(raw) : null;
+  S = salvoBruto ? Object.assign(estadoPadrao(), salvoBruto) : estadoPadrao();
 } catch (e) {
   S = estadoPadrao();
 }
 if (!Array.isArray(S.ingredientes) || !S.ingredientes.length) S.ingredientes = estadoPadrao().ingredientes;
 if (!Array.isArray(S.sabores)) S.sabores = estadoPadrao().sabores;
 if (!S.massa) S.massa = estadoPadrao().massa;
+
+/* Traz para um aparelho que já usa o app os sabores/ingredientes acrescentados ao
+   data.js depois. Nunca sobrescreve o que já existe (o usuário pode ter editado)
+   e nunca ressuscita o que ele apagou de propósito. */
+function lembrarRemovido(tipo, id) {
+  if (!S.removidos) S.removidos = { sabores: [], ingredientes: [] };
+  if (!Array.isArray(S.removidos[tipo])) S.removidos[tipo] = [];
+  if (S.removidos[tipo].indexOf(id) === -1) S.removidos[tipo].push(id);
+}
+
+function mesclarCatalogo(versaoSalva) {
+  if (Number(versaoSalva) >= CATALOGO_VERSAO) return { sabores: 0, ingredientes: 0 };
+
+  if (!S.removidos) S.removidos = { sabores: [], ingredientes: [] };
+  const remS = Array.isArray(S.removidos.sabores) ? S.removidos.sabores : [];
+  const remI = Array.isArray(S.removidos.ingredientes) ? S.removidos.ingredientes : [];
+
+  let ni = 0, ns = 0;
+  SEED_INGREDIENTES.forEach(seed => {
+    if (S.ingredientes.some(i => i.id === seed.id) || remI.indexOf(seed.id) !== -1) return;
+    S.ingredientes.push(JSON.parse(JSON.stringify(seed)));
+    ni++;
+  });
+  SEED_SABORES.forEach(seed => {
+    if (S.sabores.some(s => s.id === seed.id) || remS.indexOf(seed.id) !== -1) return;
+    S.sabores.push(JSON.parse(JSON.stringify(seed)));
+    ns++;
+  });
+
+  S.catalogo = CATALOGO_VERSAO;
+  salvar();
+  return { sabores: ns, ingredientes: ni };
+}
+
+// A mesclagem em si roda lá no fim do arquivo: ela chama salvar(), que só existe
+// depois daqui.
 
 let salvarTimer = null;
 function salvar() {
@@ -46,10 +85,14 @@ function salvar() {
 
 const nf = (v, d) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: d === undefined ? 0 : d });
 
+// Menos casas decimais conforme o número cresce: "8,05 kg", "67,3 kg", "103 kg".
+// Sem isso "103,09 kg" quebrava em duas linhas nos cards de resumo do celular.
+function casas(kg) { return kg >= 100 ? 0 : (kg >= 10 ? 1 : 2); }
+
 function fmtQt(v, un) {
   if (!v) return '0 ' + (un || 'g');
-  if (un === 'g'  && v >= 1000) return nf(v / 1000, 2) + ' kg';
-  if (un === 'ml' && v >= 1000) return nf(v / 1000, 2) + ' L';
+  if (un === 'g'  && v >= 1000) return nf(v / 1000, casas(v / 1000)) + ' kg';
+  if (un === 'ml' && v >= 1000) return nf(v / 1000, casas(v / 1000)) + ' L';
   if (un === 'un') return nf(v, 1) + ' un';
   return nf(v, v < 10 ? 1 : 0) + ' ' + (un || 'g');
 }
@@ -241,51 +284,113 @@ function atualizaPorPessoa() { renderPedido(); }
 
 let abertos = {};
 
+/* "Massa" é um ingrediente intermediário: no mercado o que se compra é farinha,
+   sal e fermento. Aqui ela é quebrada na receita escolhida na aba Massa. */
+function fmtMassa(v) {
+  if (v >= 1000) return nf(v / 1000, 2) + ' kg';
+  return nf(v, v < 100 ? 1 : 0) + ' g';
+}
+
+function receitaMassa(totalMassa) {
+  const perfil = PERFIS_MASSA[S.massa.perfil] || PERFIS_MASSA.italiana;
+  const p = perfil.pct;
+  const item = (id, nome, pct, comprar, sub) => ({
+    id: 'massa:' + id, nome: nome, sub: sub, un: 'g', qt: totalMassa * pct, comprar: comprar,
+    qtTxt: fmtMassa(totalMassa * pct),
+    det: [{
+      esq: perfil.nome + ' — ' + nf(pct * 100, pct < 0.01 ? 2 : 1) + '% da massa',
+      dir: fmtMassa(totalMassa * pct)
+    }]
+  });
+  return {
+    perfil: perfil,
+    itens: [
+      item('farinha',  'Farinha',                 p.farinha,  true),
+      item('sal',      'Sal',                     p.sal,      true),
+      item('fermento', 'Fermento biológico seco', p.fermento, true),
+      item('agua',     'Água',                    p.agua,     false, 'não precisa comprar')
+    ]
+  };
+}
+
+/* Monta a lista agrupada. Usada tanto pela tela quanto pelo botão Compartilhar. */
+function gruposCompras(t) {
+  const mid = idMassa();
+  const massaTotal = massaBase();
+  const catMassa = (mid && ing(mid) && ing(mid).cat) || 'Massa';
+  const ids = Object.keys(t.porIng).filter(id => t.porIng[id].total > 0 && id !== mid);
+  const grupos = [];
+
+  CATEGORIAS.concat(['(sem categoria)']).forEach(cat => {
+    const linhas = [];
+    let nota = '';
+
+    if (cat === catMassa && massaTotal > 0) {
+      const r = receitaMassa(massaTotal);
+      const bola = Math.max(1, Number(S.massa.bola) || 300);
+      nota = fmtQt(massaTotal, 'g') + ' de massa · ' + nf(massaTotal / bola, 1) +
+             ' bolas de ' + nf(bola) + ' g · ' + r.perfil.nome;
+      r.itens.forEach(x => linhas.push(x));
+    }
+
+    ids.filter(id => (((ing(id) || {}).cat) || '(sem categoria)') === cat)
+       .sort((a, b) => t.porIng[b].total - t.porIng[a].total)
+       .forEach(id => {
+         const i = ing(id) || { nome: id, un: 'g' };
+         linhas.push({
+           id: id, nome: i.nome, un: i.un, qt: t.porIng[id].total, comprar: true,
+           qtTxt: fmtQt(t.porIng[id].total, i.un),
+           det: t.porIng[id].detalhes.map(x => ({
+             esq: x.sabor + ' — ' + x.pizzas + '× ' + fmtQt(x.porPizza, i.un),
+             dir: fmtQt(x.total, i.un)
+           }))
+         });
+       });
+
+    if (linhas.length) grupos.push({ cat: cat, nota: nota, linhas: linhas });
+  });
+  return grupos;
+}
+
 function renderCompras() {
   const t = calcular();
-  const ids = Object.keys(t.porIng).filter(id => t.porIng[id].total > 0);
-
-  $('#resumoCompras').innerHTML =
-    stat(nf(ids.length), 'itens') +
-    stat(nf(t.totalPizzas), 'pizzas') +
-    stat(fmtQt(t.pesoTotal, 'g'), 'peso total');
 
   const box = $('#listaCompras');
-  if (!ids.length) {
+  if (!t.totalPizzas) {
+    $('#resumoCompras').innerHTML =
+      stat('0', 'itens') + stat('0', 'pizzas') + stat('0 g', 'peso total');
     box.innerHTML = '<p class="vazio">Escolha as pizzas na aba <b>Pedido</b> e a lista aparece aqui.</p>';
     return;
   }
 
-  let html = '';
-  CATEGORIAS.concat(['(sem categoria)']).forEach(cat => {
-    const doGrupo = ids
-      .filter(id => {
-        const i = ing(id);
-        const c = (i && i.cat) || '(sem categoria)';
-        return c === cat;
-      })
-      .sort((a, b) => t.porIng[b].total - t.porIng[a].total);
-    if (!doGrupo.length) return;
+  const grupos = gruposCompras(t);
+  const aComprar = grupos.reduce((a, g) => a + g.linhas.filter(l => l.comprar).length, 0);
 
-    html += '<p class="grupo-title">' + esc(cat) + '</p>';
-    doGrupo.forEach(id => {
-      const i = ing(id) || { nome: id, un: 'g' };
-      const d = t.porIng[id];
-      const done = !!S.comprados[id];
-      const open = !!abertos[id];
-      html += '<div class="compra' + (done ? ' done' : '') + '">' +
+  $('#resumoCompras').innerHTML =
+    stat(nf(aComprar), 'itens') +
+    stat(nf(t.totalPizzas), 'pizzas') +
+    stat(fmtQt(t.pesoTotal, 'g'), 'peso total');
+
+  box.innerHTML = grupos.map(g =>
+    '<p class="grupo-title">' + esc(g.cat) + '</p>' +
+    (g.nota ? '<p class="grupo-nota">' + esc(g.nota) + '</p>' : '') +
+    g.linhas.map(l => {
+      const done = l.comprar && !!S.comprados[l.id];
+      const open = !!abertos[l.id];
+      return '<div class="compra' + (done ? ' done' : '') + (l.comprar ? '' : ' info') + '">' +
         '<div class="compra-head">' +
-          '<button type="button" class="chk' + (done ? ' on' : '') + '" data-chk="' + id + '" aria-label="Marcar como comprado">✓</button>' +
-          '<span class="nome" data-det="' + id + '">' + esc(i.nome) + '</span>' +
-          '<span class="qt" data-det="' + id + '">' + fmtQt(d.total, i.un) + '</span>' +
+          (l.comprar
+            ? '<button type="button" class="chk' + (done ? ' on' : '') + '" data-chk="' + l.id + '" aria-label="Marcar como comprado">✓</button>'
+            : '<span class="chk-vazio" aria-hidden="true"></span>') +
+          '<span class="nome" data-det="' + l.id + '">' + esc(l.nome) +
+            (l.sub ? '<small>' + esc(l.sub) + '</small>' : '') + '</span>' +
+          '<span class="qt" data-det="' + l.id + '">' + esc(l.qtTxt) + '</span>' +
         '</div>' +
-        (open ? '<div class="compra-det">' + d.detalhes.map(x =>
-            '<div><span>' + esc(x.sabor) + ' — ' + x.pizzas + '× ' + fmtQt(x.porPizza, i.un) + '</span><b>' + fmtQt(x.total, i.un) + '</b></div>'
-          ).join('') + '</div>' : '') +
+        (open && l.det.length ? '<div class="compra-det">' + l.det.map(d =>
+          '<div><span>' + esc(d.esq) + '</span><b>' + esc(d.dir) + '</b></div>').join('') + '</div>' : '') +
       '</div>';
-    });
-  });
-  box.innerHTML = html;
+    }).join('')
+  ).join('');
 }
 
 $('#listaCompras').addEventListener('click', e => {
@@ -309,18 +414,15 @@ $('#btnDesmarcar').addEventListener('click', () => {
 
 $('#btnCompartilhar').addEventListener('click', async () => {
   const t = calcular();
-  const ids = Object.keys(t.porIng).filter(id => t.porIng[id].total > 0);
-  if (!ids.length) { toast('Sua lista está vazia'); return; }
+  if (!t.totalPizzas) { toast('Sua lista está vazia'); return; }
 
   let txt = '🍕 LISTA DE COMPRAS\n';
   txt += t.totalPizzas + ' pizzas para ' + S.pessoas + ' pessoas\n\n';
-  CATEGORIAS.concat(['(sem categoria)']).forEach(cat => {
-    const g = ids.filter(id => (((ing(id) || {}).cat) || '(sem categoria)') === cat);
-    if (!g.length) return;
-    txt += cat.toUpperCase() + '\n';
-    g.sort((a, b) => t.porIng[b].total - t.porIng[a].total).forEach(id => {
-      const i = ing(id) || { nome: id, un: 'g' };
-      txt += '- ' + i.nome + ': ' + fmtQt(t.porIng[id].total, i.un) + '\n';
+  gruposCompras(t).forEach(g => {
+    txt += g.cat.toUpperCase() + '\n';
+    if (g.nota) txt += '(' + g.nota.replace(/ · /g, ', ') + ')\n';
+    g.linhas.forEach(l => {
+      txt += '- ' + l.nome + ': ' + l.qtTxt + (l.comprar ? '' : ' (' + (l.sub || 'informativo') + ')') + '\n';
     });
     txt += '\n';
   });
@@ -518,6 +620,7 @@ $('#btnExcluirSabor').addEventListener('click', () => {
   if (!confirm('Excluir o sabor "' + s.nome + '"?')) return;
   S.sabores = S.sabores.filter(x => x.id !== editandoSabor);
   delete S.pedido[editandoSabor];
+  if (SEED_SABORES.some(x => x.id === editandoSabor)) lembrarRemovido('sabores', editandoSabor);
   salvar();
   $('#dlgSabor').close();
   render();
@@ -570,6 +673,7 @@ $('#btnExcluirIng').addEventListener('click', () => {
   S.ingredientes = S.ingredientes.filter(x => x.id !== editandoIng);
   S.sabores.forEach(s => { delete s.itens[editandoIng]; });
   delete S.comprados[editandoIng];
+  if (SEED_INGREDIENTES.some(x => x.id === editandoIng)) lembrarRemovido('ingredientes', editandoIng);
   salvar();
   $('#dlgIngrediente').close();
   render();
@@ -586,7 +690,31 @@ $$('dialog').forEach(d => {
 
 /* ============================= MENU / BACKUP ============================= */
 
-$('#btnMenu').addEventListener('click', () => $('#dlgMenu').showModal());
+$('#btnMenu').addEventListener('click', () => {
+  const sw = 'serviceWorker' in navigator && navigator.serviceWorker.controller;
+  $('#versaoApp').textContent =
+    'Catálogo v' + CATALOGO_VERSAO + ' · ' + S.sabores.length + ' sabores · ' +
+    (sw ? 'modo offline ativo' : 'modo offline não ativo');
+  $('#dlgMenu').showModal();
+});
+
+/* Força o aparelho a buscar a versão publicada agora, sem depender de o navegador
+   perceber sozinho que o sw.js mudou. */
+$('#btnAtualizar').addEventListener('click', async () => {
+  if (!navigator.onLine) { toast('Sem internet agora — tente depois'); return; }
+  toast('Procurando atualização…');
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.update().catch(() => {})));
+    }
+    if (window.caches) {
+      const ks = await caches.keys();
+      await Promise.all(ks.map(k => caches.delete(k)));
+    }
+  } catch (e) { /* segue e recarrega mesmo assim */ }
+  location.reload();
+});
 
 $('#btnExportar').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
@@ -611,6 +739,8 @@ $('#fileImport').addEventListener('change', e => {
       }
       if (!confirm('Isso substitui os dados atuais. Continuar?')) return;
       S = Object.assign(estadoPadrao(), dados);
+      // backup antigo pode não ter os sabores mais novos
+      mesclarCatalogo(Number(dados.catalogo) || 0);
       salvar();
       $('#dlgMenu').close();
       render();
@@ -662,6 +792,17 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 }
 
 /* ============================= START ============================= */
+
+// Sem nada salvo, o seed já veio inteiro — não há o que mesclar.
+const novidades = mesclarCatalogo(salvoBruto ? (Number(salvoBruto.catalogo) || 0) : CATALOGO_VERSAO);
+
 irPara('pedido');
+
+if (novidades.sabores || novidades.ingredientes) {
+  const partes = [];
+  if (novidades.sabores) partes.push(novidades.sabores + (novidades.sabores > 1 ? ' sabores novos' : ' sabor novo'));
+  if (novidades.ingredientes) partes.push(novidades.ingredientes + (novidades.ingredientes > 1 ? ' ingredientes novos' : ' ingrediente novo'));
+  toast('🍕 ' + partes.join(' e '));
+}
 
 })();

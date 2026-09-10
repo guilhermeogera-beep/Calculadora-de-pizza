@@ -1,6 +1,6 @@
 /* Service worker - app shell offline.
    Troque a versão sempre que publicar mudanças, para o app atualizar nos celulares. */
-const VERSAO = 'pizza-v1';
+const VERSAO = 'pizza-v3';
 
 const ARQUIVOS = [
   './',
@@ -33,23 +33,26 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  if (new URL(req.url).origin !== location.origin) return;
 
-  // Navegação: tenta a rede, cai para o index em cache quando offline.
-  if (req.mode === 'navigate') {
-    e.respondWith(
-      fetch(req).catch(() => caches.match('./index.html'))
-    );
-    return;
-  }
-
-  // Demais arquivos: cache primeiro (é tudo estático).
+  /* REDE PRIMEIRO, cache como rede de segurança.
+     Antes era cache primeiro, e o resultado era este: você publicava uma versão
+     nova, o index.html vinha da rede, mas o app.js continuava saindo do cache
+     velho — o app parecia não atualizar. Agora, com internet, o que está no ar
+     sempre ganha; sem internet, cai para o cache e continua funcionando. */
   e.respondWith(
-    caches.match(req).then(hit => hit || fetch(req).then(res => {
-      if (res && res.status === 200 && res.type === 'basic') {
-        const copia = res.clone();
-        caches.open(VERSAO).then(c => c.put(req, copia));
-      }
-      return res;
-    }).catch(() => new Response('', { status: 504, statusText: 'Offline' })))
+    fetch(req)
+      .then(res => {
+        if (res && res.status === 200 && res.type === 'basic') {
+          const copia = res.clone();
+          caches.open(VERSAO).then(c => c.put(req, copia));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req).then(hit =>
+        hit ||
+        (req.mode === 'navigate' ? caches.match('./index.html') : null) ||
+        new Response('', { status: 504, statusText: 'Offline' })
+      ))
   );
 });

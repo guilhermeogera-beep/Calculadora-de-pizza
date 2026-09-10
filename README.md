@@ -127,9 +127,12 @@ antigos do cache.
 
 As proporções das massas também são da planilha: a napolitana e a direta usam as linhas 76–81
 (58% farinha / 40,5% água / 1,4% sal / 0,2% fermento) e a caseira usa as linhas 58–63
-(60 / 40 / 2 / 0,12). Os tempos vêm das anotações de 12/01 e 13/01 da mesma aba. O texto do
-modo de preparo — a ordem das etapas, os porquês e as dicas — foi escrito para o app, não
-estava na planilha.
+(60 / 40 / 2 / 0,12). Os tempos vêm das anotações de 12/01 e 13/01 da mesma aba.
+
+O modo de preparo da **Napolitana** é o método que o Guilherme faz de verdade: fermento na
+água, metade da farinha, sal, resto da farinha, 4 h para dar liga, boleia e 48 h de geladeira —
+sem sova. As duas últimas etapas (tirar da geladeira e assar) e as dicas foram escritas para o
+app.
 
 Conferido: o mesmo pedido de exemplo da planilha (2 marguerita,
 2 corn bacon, 2 philadélfia, 3 banana com nutella, 2 calabresa, 2 montanella) dá os mesmos

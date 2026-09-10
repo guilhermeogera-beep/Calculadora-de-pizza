@@ -1,12 +1,13 @@
 /* Service worker - app shell offline.
    Troque a versão sempre que publicar mudanças, para o app atualizar nos celulares. */
-const VERSAO = 'pizza-v5';
+const VERSAO = 'pizza-v7';
 
 const ARQUIVOS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './assets/css/style.css',
+  './catalogo.json',
   './assets/js/data.js',
   './assets/js/app.js',
   './assets/icons/icon-192.png',

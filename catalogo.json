@@ -1,0 +1,6 @@
+{
+  "_leiame": "Catalogo compartilhado. O app baixa este arquivo ao abrir e acrescenta o que a pessoa ainda nao tem. Nunca sobrescreve sabor que ela editou nem ressuscita o que ela apagou. Para publicar um sabor novo: gere o arquivo pelo proprio app (menu ... > Gerar catalogo.json), ou edite aqui na mao. SEMPRE suba a versao em 1, senao quem ja abriu o app nao recebe.",
+  "versao": 1,
+  "ingredientes": [],
+  "sabores": []
+}

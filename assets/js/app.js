@@ -45,28 +45,50 @@ function lembrarRemovido(tipo, id) {
   if (S.removidos[tipo].indexOf(id) === -1) S.removidos[tipo].push(id);
 }
 
-function mesclarCatalogo(versaoSalva) {
-  if (Number(versaoSalva) >= CATALOGO_VERSAO) return { sabores: 0, ingredientes: 0 };
-
+/* Acrescenta o que falta, venha de onde vier: do data.js embutido, do
+   catalogo.json publicado ou de um link que alguém mandou. Sempre só acrescenta. */
+function mesclarListas(ings, sabs) {
   if (!S.removidos) S.removidos = { sabores: [], ingredientes: [] };
   const remS = Array.isArray(S.removidos.sabores) ? S.removidos.sabores : [];
   const remI = Array.isArray(S.removidos.ingredientes) ? S.removidos.ingredientes : [];
 
   let ni = 0, ns = 0;
-  SEED_INGREDIENTES.forEach(seed => {
-    if (S.ingredientes.some(i => i.id === seed.id) || remI.indexOf(seed.id) !== -1) return;
-    S.ingredientes.push(JSON.parse(JSON.stringify(seed)));
+  (ings || []).forEach(x => {
+    if (!x || !x.id) return;
+    if (S.ingredientes.some(i => i.id === x.id) || remI.indexOf(x.id) !== -1) return;
+    S.ingredientes.push({
+      id: String(x.id), nome: String(x.nome || x.id).slice(0, 40),
+      un: ['g', 'ml', 'un'].indexOf(x.un) !== -1 ? x.un : 'g',
+      cat: CATEGORIAS.indexOf(x.cat) !== -1 ? x.cat : 'Outros'
+    });
     ni++;
   });
-  SEED_SABORES.forEach(seed => {
-    if (S.sabores.some(s => s.id === seed.id) || remS.indexOf(seed.id) !== -1) return;
-    S.sabores.push(JSON.parse(JSON.stringify(seed)));
+  (sabs || []).forEach(x => {
+    if (!x || !x.id || !x.itens) return;
+    if (S.sabores.some(s => s.id === x.id) || remS.indexOf(x.id) !== -1) return;
+    S.sabores.push({
+      id: String(x.id), nome: String(x.nome || x.id).slice(0, 60),
+      tipo: x.tipo === 'doce' ? 'doce' : 'salgada',
+      itens: Object.assign({}, x.itens)
+    });
     ns++;
   });
+  return { sabores: ns, ingredientes: ni };
+}
 
+function mesclarCatalogo(versaoSalva) {
+  if (Number(versaoSalva) >= CATALOGO_VERSAO) return { sabores: 0, ingredientes: 0 };
+  const r = mesclarListas(SEED_INGREDIENTES, SEED_SABORES);
   S.catalogo = CATALOGO_VERSAO;
   salvar();
-  return { sabores: ns, ingredientes: ni };
+  return r;
+}
+
+function frase(r) {
+  const p = [];
+  if (r.sabores) p.push(r.sabores + (r.sabores > 1 ? ' sabores novos' : ' sabor novo'));
+  if (r.ingredientes) p.push(r.ingredientes + (r.ingredientes > 1 ? ' ingredientes novos' : ' ingrediente novo'));
+  return p.join(' e ');
 }
 
 // A mesclagem em si roda lá no fim do arquivo: ela chama salvar(), que só existe
@@ -659,7 +681,7 @@ $('#btnExcluirSabor').addEventListener('click', () => {
   if (!confirm('Excluir o sabor "' + s.nome + '"?')) return;
   S.sabores = S.sabores.filter(x => x.id !== editandoSabor);
   delete S.pedido[editandoSabor];
-  if (SEED_SABORES.some(x => x.id === editandoSabor)) lembrarRemovido('sabores', editandoSabor);
+  lembrarRemovido('sabores', editandoSabor);
   salvar();
   $('#dlgSabor').close();
   render();
@@ -712,7 +734,7 @@ $('#btnExcluirIng').addEventListener('click', () => {
   S.ingredientes = S.ingredientes.filter(x => x.id !== editandoIng);
   S.sabores.forEach(s => { delete s.itens[editandoIng]; });
   delete S.comprados[editandoIng];
-  if (SEED_INGREDIENTES.some(x => x.id === editandoIng)) lembrarRemovido('ingredientes', editandoIng);
+  lembrarRemovido('ingredientes', editandoIng);
   salvar();
   $('#dlgIngrediente').close();
   render();
@@ -726,6 +748,160 @@ $$('dialog').forEach(d => {
     if (e.target === d) d.close();          // clique no backdrop
   });
 });
+
+/* ===================== COMPARTILHAR SABOR POR LINK ===================== */
+
+function b64urlEnc(txt) {
+  const bytes = new TextEncoder().encode(txt);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDec(s) {
+  s = String(s).replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  const bin = atob(s);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+// O pacote leva os ingredientes usados junto: quem recebe pode não ter todos.
+function linkDoSabor(s) {
+  const pacote = {
+    v: 1,
+    s: { id: s.id, nome: s.nome, tipo: s.tipo, itens: s.itens },
+    i: Object.keys(s.itens || {}).map(id => ing(id)).filter(Boolean)
+        .map(i => ({ id: i.id, nome: i.nome, un: i.un, cat: i.cat }))
+  };
+  return location.origin + location.pathname + '?s=' + b64urlEnc(JSON.stringify(pacote));
+}
+
+/* Vem de um link que outra pessoa mandou: trate como dado sujo. */
+function limpaPacote(p) {
+  if (!p || typeof p !== 'object' || !p.s || typeof p.s !== 'object') return null;
+  const nome = String(p.s.nome || '').trim().slice(0, 60);
+  if (!nome) return null;
+
+  const itens = {};
+  const bruto = (p.s.itens && typeof p.s.itens === 'object') ? p.s.itens : {};
+  Object.keys(bruto).slice(0, 40).forEach(k => {
+    const g = Number(bruto[k]);
+    if (!isFinite(g) || g <= 0 || g > 5000) return;
+    itens[String(k).slice(0, 60)] = Math.round(g);
+  });
+  if (!Object.keys(itens).length) return null;
+
+  const ings = (Array.isArray(p.i) ? p.i : []).slice(0, 40)
+    .filter(x => x && x.id)
+    .map(x => ({
+      id: String(x.id).slice(0, 60), nome: String(x.nome || x.id).slice(0, 40),
+      un: ['g', 'ml', 'un'].indexOf(x.un) !== -1 ? x.un : 'g',
+      cat: CATEGORIAS.indexOf(x.cat) !== -1 ? x.cat : 'Outros'
+    }));
+
+  return {
+    sabor: { id: String(p.s.id || slug(nome)).slice(0, 60), nome: nome,
+             tipo: p.s.tipo === 'doce' ? 'doce' : 'salgada', itens: itens },
+    ings: ings
+  };
+}
+
+let pacoteRecebido = null;
+
+function abrirRecebido(p) {
+  pacoteRecebido = p;
+  const jaTem = S.sabores.some(s => s.id === p.sabor.id);
+  const nomes = Object.assign({}, ...p.ings.map(i => ({ [i.id]: i })));
+  const total = Object.values(p.sabor.itens).reduce((a, b) => a + b, 0);
+  const novos = p.ings.filter(i => !ing(i.id));
+
+  $('#receberResumo').innerHTML =
+    '<div class="linha destaque"><span>' + esc(p.sabor.nome) +
+      (p.sabor.tipo === 'doce' ? ' <span class="tag doce">doce</span>' : '') +
+      '</span><b>' + fmtQt(total, 'g') + '</b></div>' +
+    Object.keys(p.sabor.itens).map(id => {
+      const i = ing(id) || nomes[id] || { nome: id, un: 'g' };
+      return '<div class="linha"><span>' + esc(i.nome) + '</span><b>' +
+        fmtQt(p.sabor.itens[id], i.un) + '</b></div>';
+    }).join('');
+
+  const avisos = [];
+  if (novos.length) {
+    avisos.push('Traz ' + novos.length + (novos.length > 1 ? ' ingredientes novos' : ' ingrediente novo') +
+                ': ' + novos.map(i => i.nome).join(', ') + '.');
+  }
+  if (jaTem) avisos.push('Você já tem um sabor com esse nome — ele será adicionado como uma cópia.');
+  $('#receberAviso').textContent = avisos.join(' ');
+  $('#btnAceitarSabor').textContent = jaTem ? 'Adicionar como cópia' : 'Adicionar';
+  $('#dlgReceber').showModal();
+}
+
+function limparURL() {
+  try { history.replaceState({}, '', location.pathname); } catch (e) {}
+}
+
+$('#btnAceitarSabor').addEventListener('click', () => {
+  const p = pacoteRecebido;
+  if (!p) return;
+  const sabor = Object.assign({}, p.sabor);
+  if (S.sabores.some(s => s.id === sabor.id)) {
+    sabor.id = idUnico(sabor.nome, S.sabores);
+    sabor.nome = sabor.nome + ' (cópia)';
+  }
+  // um sabor recebido de propósito volta mesmo que já tenha sido apagado antes
+  if (S.removidos && Array.isArray(S.removidos.sabores)) {
+    S.removidos.sabores = S.removidos.sabores.filter(id => id !== sabor.id);
+  }
+  mesclarListas(p.ings, [sabor]);
+  salvar();
+  $('#dlgReceber').close();
+  limparURL();
+  irPara('sabores');
+  toast('"' + sabor.nome + '" adicionado');
+});
+
+$('#dlgReceber').addEventListener('close', limparURL);
+
+$('#btnCompartilharSabor').addEventListener('click', async () => {
+  if (!editandoSabor) { toast('Salve o sabor primeiro'); return; }
+  const s = sab(editandoSabor);
+  if (!s) return;
+  const link = linkDoSabor(s);
+  const txt = '🍕 ' + s.nome + ' — receita para a Calculadora de Pizza:\n' + link;
+  try {
+    if (navigator.share) { await navigator.share({ title: s.nome, text: txt }); return; }
+    await navigator.clipboard.writeText(txt);
+    toast('Link copiado! É só colar no WhatsApp.');
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    toast('Não consegui compartilhar aqui');
+  }
+});
+
+/* =================== CATÁLOGO PUBLICADO (catalogo.json) =================== */
+
+async function sincronizarCatalogo() {
+  if (!navigator.onLine) return;
+  let dados;
+  try {
+    const r = await fetch('./catalogo.json', { cache: 'no-cache' });
+    if (!r.ok) return;                 // ainda não existe no site: tudo bem
+    dados = await r.json();
+  } catch (e) { return; }              // offline ou arquivo inválido: segue a vida
+
+  if (!dados || typeof dados !== 'object') return;
+  const versao = Number(dados.versao) || 0;
+  if (versao <= (Number(S.catalogoRemoto) || 0)) return;
+
+  const r = mesclarListas(dados.ingredientes, dados.sabores);
+  S.catalogoRemoto = versao;
+  salvar();
+  if (r.sabores || r.ingredientes) {
+    render();
+    toast('🍕 ' + frase(r) + ' do catálogo');
+  }
+}
 
 /* ============================= MENU / BACKUP ============================= */
 
@@ -753,6 +929,39 @@ $('#btnAtualizar').addEventListener('click', async () => {
     }
   } catch (e) { /* segue e recarrega mesmo assim */ }
   location.reload();
+});
+
+function baixar(nome, conteudo) {
+  const blob = new Blob([conteudo], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nome;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* Junta tudo que não veio do data.js num catalogo.json pronto para publicar. */
+$('#btnGerarCatalogo').addEventListener('click', () => {
+  const sabores = S.sabores.filter(s => !SEED_SABORES.some(x => x.id === s.id));
+  if (!sabores.length) {
+    toast('Nenhum sabor além dos que já vêm no app');
+    return;
+  }
+  const usados = {};
+  sabores.forEach(s => Object.keys(s.itens || {}).forEach(id => { usados[id] = true; }));
+  const ingredientes = S.ingredientes.filter(i =>
+    usados[i.id] && !SEED_INGREDIENTES.some(x => x.id === i.id));
+
+  baixar('catalogo.json', JSON.stringify({
+    _leiame: 'Catalogo compartilhado. Suba a versao em 1 sempre que mexer aqui, ' +
+             'senao quem ja abriu o app nao recebe as novidades.',
+    versao: (Number(S.catalogoRemoto) || 0) + 1,
+    ingredientes: ingredientes,
+    sabores: sabores.map(s => ({ id: s.id, nome: s.nome, tipo: s.tipo, itens: s.itens }))
+  }, null, 2));
+
+  $('#dlgMenu').close();
+  toast(sabores.length + (sabores.length > 1 ? ' sabores' : ' sabor') + ' no arquivo — publique na raiz do site');
 });
 
 $('#btnExportar').addEventListener('click', () => {
@@ -837,11 +1046,23 @@ const novidades = mesclarCatalogo(salvoBruto ? (Number(salvoBruto.catalogo) || 0
 
 irPara('pedido');
 
-if (novidades.sabores || novidades.ingredientes) {
-  const partes = [];
-  if (novidades.sabores) partes.push(novidades.sabores + (novidades.sabores > 1 ? ' sabores novos' : ' sabor novo'));
-  if (novidades.ingredientes) partes.push(novidades.ingredientes + (novidades.ingredientes > 1 ? ' ingredientes novos' : ' ingrediente novo'));
-  toast('🍕 ' + partes.join(' e '));
+// Um link compartilhado tem prioridade: é o motivo de a pessoa ter aberto o app.
+const recebido = (function () {
+  const m = location.search.match(/[?&]s=([^&]+)/);
+  if (!m) return null;
+  try { return limpaPacote(JSON.parse(b64urlDec(decodeURIComponent(m[1])))); }
+  catch (e) { return null; }
+})();
+
+if (recebido) {
+  abrirRecebido(recebido);
+} else if (location.search.indexOf('s=') !== -1) {
+  // veio um ?s= que não deu para ler: tira da URL para não insistir a cada recarga
+  limparURL();
+  toast('Esse link de sabor está quebrado');
+} else {
+  if (novidades.sabores || novidades.ingredientes) toast('🍕 ' + frase(novidades));
+  sincronizarCatalogo();
 }
 
 })();

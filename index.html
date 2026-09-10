@@ -144,6 +144,7 @@
       <button type="button" class="btn small" id="btnAddItem">Adicionar</button>
     </div>
     <p class="total-linha">Total por pizza: <strong id="saborTotal">0 g</strong></p>
+    <button type="button" class="btn ghost full compartilhar-sabor" id="btnCompartilharSabor">🔗 Compartilhar este sabor</button>
     <div class="dlg-actions">
       <button type="button" class="btn danger ghost" id="btnExcluirSabor">Excluir</button>
       <span class="grow"></span>
@@ -186,6 +187,7 @@
     <h2>Opções</h2>
     <div class="menu-list">
       <button type="button" class="menu-item" id="btnAtualizar">🔄 Buscar atualização do app</button>
+      <button type="button" class="menu-item" id="btnGerarCatalogo">📦 Gerar catalogo.json (para publicar)</button>
       <button type="button" class="menu-item" id="btnExportar">⬇️ Exportar dados (backup .json)</button>
       <button type="button" class="menu-item" id="btnImportar">⬆️ Importar backup</button>
       <button type="button" class="menu-item danger" id="btnReset">↺ Restaurar sabores originais</button>
@@ -195,6 +197,20 @@
     <div class="dlg-actions">
       <span class="grow"></span>
       <button type="button" class="btn ghost" data-close>Fechar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgReceber">
+  <form method="dialog">
+    <h2>🍕 Sabor compartilhado</h2>
+    <p class="hint" id="receberOrigem">Alguém mandou este sabor para você.</p>
+    <div class="card massa-tabela" id="receberResumo"></div>
+    <p class="hint" id="receberAviso"></p>
+    <div class="dlg-actions">
+      <span class="grow"></span>
+      <button type="button" class="btn ghost" data-close>Agora não</button>
+      <button type="button" class="btn" id="btnAceitarSabor">Adicionar</button>
     </div>
   </form>
 </dialog>

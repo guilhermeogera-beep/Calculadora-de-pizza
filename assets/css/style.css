@@ -239,9 +239,11 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .legenda-espera i{width:9px;height:9px;border-radius:50%;background:var(--gold);flex:none}
 
 /* ---------- massa ---------- */
-.massa-tabela .linha{display:flex;justify-content:space-between;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--line)}
+.massa-tabela .linha{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
 .massa-tabela .linha:last-child{border-bottom:0}
-.massa-tabela .linha b{font-size:18px;color:var(--gold);font-variant-numeric:tabular-nums}
+.massa-tabela .linha>span{min-width:0;overflow-wrap:break-word}
+/* nowrap: com nome de sabor comprido, "860 g" quebrava entre o número e a unidade */
+.massa-tabela .linha b{font-size:18px;color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap}
 .massa-tabela .linha .pct{font-size:12px;color:var(--muted);margin-left:6px}
 .massa-tabela .linha.destaque b{color:var(--text)}
 .crono{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px;overflow:hidden}

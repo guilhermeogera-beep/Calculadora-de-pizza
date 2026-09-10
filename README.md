@@ -16,7 +16,8 @@ Tudo roda no navegador. Não tem servidor, não tem cadastro, nenhum dado sai do
 | **Massa** | Três receitas completas e independentes: escolha uma e só ela aparece embaixo — ingredientes calculados a partir da massa do pedido, modo de preparo em linha do tempo (com as etapas de espera destacadas) e dicas específicas daquela receita. |
 | **Cadastro** | Cria, edita e apaga sabores (com a gramagem de cada ingrediente por pizza) e o catálogo de ingredientes. |
 
-No menu **⋯** (canto superior direito) tem exportar/importar backup em `.json` e restaurar os
+No menu **⋯** (canto superior direito) tem buscar atualização do app, gerar o `catalogo.json`,
+exportar/importar backup em `.json` e restaurar os
 sabores originais.
 
 ## Rodando na sua máquina
@@ -54,7 +55,7 @@ navegador, e funciona sem internet.
 Sempre que mudar algum arquivo, incremente a versão do cache no topo de `sw.js`:
 
 ```js
-const VERSAO = 'pizza-v4';   // era pizza-v3
+const VERSAO = 'pizza-v7';   // era pizza-v6
 ```
 
 ### "Publiquei mas o celular continua na versão antiga"
@@ -90,6 +91,7 @@ Na ordem, do mais rápido para o mais bruto:
 index.html               telas e diálogos
 manifest.webmanifest     nome, ícones e cores da PWA
 sw.js                    cache offline
+catalogo.json            sabores publicados, baixado pelo app a cada abertura
 assets/css/style.css     estilo (mobile-first, tema escuro)
 assets/js/data.js        sabores, ingredientes e receitas iniciais (vindos da planilha)
 assets/js/app.js         cálculo, telas e persistência
@@ -98,7 +100,39 @@ assets/icons/            ícones 192/512 + maskable
 
 Para mudar só no seu aparelho, use a aba **Cadastro**.
 
-### Acrescentando um sabor para todo mundo
+## Passando sabores de uma pessoa para outra
+
+São dois caminhos, e os dois só **acrescentam** — nunca sobrescrevem um sabor que a pessoa
+editou nem trazem de volta o que ela apagou de propósito.
+
+### 1. Link no WhatsApp (pessoa a pessoa)
+
+Abra o sabor na aba **Cadastro** e toque em **🔗 Compartilhar este sabor**. Sai um link com a
+receita inteira dentro dele — inclusive os ingredientes que quem recebe talvez não tenha
+cadastrado. Quem abre o link vê um resumo e decide se adiciona.
+
+Não passa por servidor nenhum: a receita viaja na própria URL. Um sabor comum dá uns 550
+caracteres, cabe folgado numa mensagem.
+
+Se a pessoa já tiver um sabor com aquele nome, o botão vira **Adicionar como cópia** — nada é
+sobrescrito.
+
+### 2. `catalogo.json` (para todo mundo de uma vez)
+
+O app baixa o `catalogo.json` da raiz do site toda vez que abre e acrescenta o que faltar.
+É assim que um sabor novo chega em todos os aparelhos sem ninguém precisar mandar link.
+
+Para publicar um sabor que alguém te mandou:
+
+1. Adicione o sabor no seu app (pelo link que a pessoa mandou, ou na mão pela aba Cadastro).
+2. Menu **⋯ → 📦 Gerar catalogo.json**. Ele monta o arquivo com tudo que não vem de fábrica,
+   já com a versão incrementada.
+3. Suba o arquivo na raiz do repositório, junto do `index.html`.
+
+O campo `versao` é o que dispara a atualização nos celulares. Se você editar o arquivo na mão,
+**lembre de subir esse número** — sem isso ninguém recebe.
+
+### Acrescentando um sabor direto no código
 
 Edite `assets/js/data.js` **e suba o `CATALOGO_VERSAO` em 1**:
 

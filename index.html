@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calculadora de Pizza</title>
+<meta name="description" content="Monte a quantidade de pizzas, veja quanto de cada ingrediente comprar e a receita da massa italiana.">
+<meta name="theme-color" content="#16110f">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icons/icon-192.png">
+<link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pizza">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="./assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <h1 id="viewTitle">Pedido</h1>
+    <button class="icon-btn" id="btnMenu" aria-label="Mais opções" title="Mais opções">⋯</button>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ============ PEDIDO ============ -->
+  <section class="view" id="view-pedido">
+    <div class="resumo" id="resumoPedido"></div>
+
+    <div class="card pessoas-card">
+      <div class="field">
+        <label for="inpPessoas">Quantas pessoas</label>
+        <div class="stepper">
+          <button type="button" data-pessoas="-1" aria-label="Menos uma pessoa">−</button>
+          <input type="number" id="inpPessoas" min="1" step="1" inputmode="numeric" value="10">
+          <button type="button" data-pessoas="1" aria-label="Mais uma pessoa">+</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="inpFatias">Fatias por pizza</label>
+        <div class="stepper">
+          <button type="button" data-fatias="-1" aria-label="Menos uma fatia">−</button>
+          <input type="number" id="inpFatias" min="1" step="1" inputmode="numeric" value="8">
+          <button type="button" data-fatias="1" aria-label="Mais uma fatia">+</button>
+        </div>
+      </div>
+      <div id="porPessoa" class="por-pessoa"></div>
+    </div>
+
+    <div class="toolbar">
+      <input type="search" id="buscaPedido" class="search" placeholder="Buscar sabor…" aria-label="Buscar sabor">
+      <button class="btn ghost" id="btnLimparPedido">Zerar</button>
+    </div>
+
+    <div id="listaPedido" class="lista"></div>
+  </section>
+
+  <!-- ============ COMPRAS ============ -->
+  <section class="view hidden" id="view-compras">
+    <div class="resumo" id="resumoCompras"></div>
+    <div class="toolbar">
+      <button class="btn" id="btnCompartilhar">Compartilhar lista</button>
+      <button class="btn ghost" id="btnDesmarcar">Desmarcar tudo</button>
+    </div>
+    <p class="hint">Toque no ingrediente para ver de quais sabores ele vem. Toque no quadradinho para marcar o que já comprou.</p>
+    <div id="listaCompras" class="lista"></div>
+  </section>
+
+  <!-- ============ MASSA ============ -->
+  <section class="view hidden" id="view-massa">
+    <div class="card">
+      <div class="field">
+        <label for="selPerfil">Receita</label>
+        <select id="selPerfil"></select>
+        <p class="hint" id="descPerfil"></p>
+      </div>
+      <div class="field">
+        <label for="inpBola">Peso de cada bola (g)</label>
+        <input type="number" id="inpBola" min="50" step="10" inputmode="numeric" value="300">
+      </div>
+      <div class="field">
+        <label for="inpMassaTotal">Massa total necessária (g)</label>
+        <input type="number" id="inpMassaTotal" min="0" step="50" inputmode="numeric">
+        <p class="hint">Vem do seu pedido. Você pode mudar aqui para calcular outra quantidade.</p>
+      </div>
+      <button class="btn ghost full" id="btnSyncMassa">Voltar ao valor do pedido</button>
+    </div>
+
+    <h2 class="sec-title">Ingredientes da massa</h2>
+    <div id="tabelaMassa" class="card massa-tabela"></div>
+
+    <h2 class="sec-title">Modo de preparo</h2>
+    <div id="cronogramas"></div>
+
+    <div class="card nota">
+      <strong>Dicas</strong>
+      <ul>
+        <li>Água bem gelada ajuda a controlar a fermentação quando a cozinha está quente.</li>
+        <li>Nunca jogue o sal direto em cima do fermento — dissolva o sal na água primeiro.</li>
+        <li>Forno o mais quente possível. Pedra ou chapa pré-aquecida por 40 min faz muita diferença.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ SABORES ============ -->
+  <section class="view hidden" id="view-sabores">
+    <div class="toolbar">
+      <input type="search" id="buscaSabor" class="search" placeholder="Buscar sabor…" aria-label="Buscar sabor">
+      <button class="btn" id="btnNovoSabor">+ Sabor</button>
+    </div>
+    <div id="listaSabores" class="lista"></div>
+
+    <h2 class="sec-title">Ingredientes cadastrados</h2>
+    <div class="toolbar">
+      <button class="btn ghost" id="btnNovoIngrediente">+ Ingrediente</button>
+    </div>
+    <div id="listaIngredientes" class="lista compact"></div>
+  </section>
+
+</main>
+
+<nav class="tabbar" id="tabbar">
+  <button class="tab is-active" data-view="pedido"><span class="tab-ic">🍕</span>Pedido</button>
+  <button class="tab" data-view="compras"><span class="tab-ic">🛒</span>Compras</button>
+  <button class="tab" data-view="massa"><span class="tab-ic">🥖</span>Massa</button>
+  <button class="tab" data-view="sabores"><span class="tab-ic">📋</span>Cadastro</button>
+</nav>
+
+<!-- ============ DIALOGS ============ -->
+<dialog id="dlgSabor">
+  <form method="dialog" id="formSabor">
+    <h2 id="dlgSaborTitle">Novo sabor</h2>
+    <div class="field">
+      <label for="saborNome">Nome</label>
+      <input type="text" id="saborNome" required maxlength="60" placeholder="Ex.: Marguerita">
+    </div>
+    <div class="field">
+      <label for="saborTipo">Tipo</label>
+      <select id="saborTipo">
+        <option value="salgada">Salgada</option>
+        <option value="doce">Doce</option>
+      </select>
+    </div>
+    <h3>Ingredientes por pizza</h3>
+    <div id="saborItens" class="sabor-itens"></div>
+    <div class="add-item">
+      <select id="novoItemIng" aria-label="Ingrediente"></select>
+      <input type="number" id="novoItemQtd" min="0" step="5" inputmode="numeric" placeholder="g">
+      <button type="button" class="btn small" id="btnAddItem">Adicionar</button>
+    </div>
+    <p class="total-linha">Total por pizza: <strong id="saborTotal">0 g</strong></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn danger ghost" id="btnExcluirSabor">Excluir</button>
+      <span class="grow"></span>
+      <button type="button" class="btn ghost" data-close>Cancelar</button>
+      <button type="button" class="btn" id="btnSalvarSabor">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgIngrediente">
+  <form method="dialog">
+    <h2 id="dlgIngTitle">Novo ingrediente</h2>
+    <div class="field">
+      <label for="ingNome">Nome</label>
+      <input type="text" id="ingNome" required maxlength="40" placeholder="Ex.: Provolone">
+    </div>
+    <div class="field">
+      <label for="ingUn">Unidade</label>
+      <select id="ingUn">
+        <option value="g">gramas (g)</option>
+        <option value="ml">mililitros (ml)</option>
+        <option value="un">unidades (un)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="ingCat">Categoria (agrupa na lista de compras)</label>
+      <select id="ingCat"></select>
+    </div>
+    <div class="dlg-actions">
+      <button type="button" class="btn danger ghost" id="btnExcluirIng">Excluir</button>
+      <span class="grow"></span>
+      <button type="button" class="btn ghost" data-close>Cancelar</button>
+      <button type="button" class="btn" id="btnSalvarIng">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgMenu">
+  <form method="dialog">
+    <h2>Opções</h2>
+    <div class="menu-list">
+      <button type="button" class="menu-item" id="btnExportar">⬇️ Exportar dados (backup .json)</button>
+      <button type="button" class="menu-item" id="btnImportar">⬆️ Importar backup</button>
+      <button type="button" class="menu-item danger" id="btnReset">↺ Restaurar sabores originais</button>
+    </div>
+    <input type="file" id="fileImport" accept="application/json,.json" hidden>
+    <div class="dlg-actions">
+      <span class="grow"></span>
+      <button type="button" class="btn ghost" data-close>Fechar</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="./assets/js/data.js"></script>
+<script src="./assets/js/app.js"></script>
+</body>
+</html>

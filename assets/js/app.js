@@ -1,0 +1,667 @@
+/* Calculadora de Pizza - PWA
+   Estado 100% local (localStorage). Nada sai do aparelho. */
+(function () {
+'use strict';
+
+const KEY = 'pizzaCalc.v1';
+const $  = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+
+/* ============================= ESTADO ============================= */
+
+function estadoPadrao() {
+  return {
+    v: 1,
+    ingredientes: JSON.parse(JSON.stringify(SEED_INGREDIENTES)),
+    sabores: JSON.parse(JSON.stringify(SEED_SABORES)),
+    pedido: {},
+    pessoas: 10,
+    fatias: 8,
+    comprados: {},
+    massa: { perfil: 'italiana', bola: 300, override: null }
+  };
+}
+
+let S;
+try {
+  const raw = localStorage.getItem(KEY);
+  S = raw ? Object.assign(estadoPadrao(), JSON.parse(raw)) : estadoPadrao();
+} catch (e) {
+  S = estadoPadrao();
+}
+if (!Array.isArray(S.ingredientes) || !S.ingredientes.length) S.ingredientes = estadoPadrao().ingredientes;
+if (!Array.isArray(S.sabores)) S.sabores = estadoPadrao().sabores;
+if (!S.massa) S.massa = estadoPadrao().massa;
+
+let salvarTimer = null;
+function salvar() {
+  clearTimeout(salvarTimer);
+  salvarTimer = setTimeout(() => {
+    try { localStorage.setItem(KEY, JSON.stringify(S)); }
+    catch (e) { toast('Não consegui salvar (armazenamento cheio?)'); }
+  }, 120);
+}
+
+/* ============================= UTIL ============================= */
+
+const nf = (v, d) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: d === undefined ? 0 : d });
+
+function fmtQt(v, un) {
+  if (!v) return '0 ' + (un || 'g');
+  if (un === 'g'  && v >= 1000) return nf(v / 1000, 2) + ' kg';
+  if (un === 'ml' && v >= 1000) return nf(v / 1000, 2) + ' L';
+  if (un === 'un') return nf(v, 1) + ' un';
+  return nf(v, v < 10 ? 1 : 0) + ' ' + (un || 'g');
+}
+
+function slug(txt) {
+  return (txt || '').toString().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'item';
+}
+function idUnico(base, lista) {
+  let id = slug(base), n = 2;
+  while (lista.some(x => x.id === id)) id = slug(base) + '-' + (n++);
+  return id;
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+const ing = id => S.ingredientes.find(i => i.id === id);
+const sab = id => S.sabores.find(s => s.id === id);
+
+function idMassa() {
+  if (ing('massa')) return 'massa';
+  const m = S.ingredientes.find(i => /massa|dough/i.test(i.nome));
+  return m ? m.id : null;
+}
+
+function pesoSabor(s) {
+  return Object.values(s.itens || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+}
+
+/* ============================= CÁLCULO ============================= */
+
+function calcular() {
+  const porIng = {};       // ingId -> { total, detalhes: [] }
+  let totalPizzas = 0, pesoTotal = 0;
+
+  S.sabores.forEach(s => {
+    const q = Number(S.pedido[s.id]) || 0;
+    if (q <= 0) return;
+    totalPizzas += q;
+    Object.keys(s.itens || {}).forEach(iid => {
+      const g = Number(s.itens[iid]) || 0;
+      if (!g) return;
+      if (!porIng[iid]) porIng[iid] = { total: 0, detalhes: [] };
+      porIng[iid].total += g * q;
+      porIng[iid].detalhes.push({ sabor: s.nome, pizzas: q, porPizza: g, total: g * q });
+      pesoTotal += g * q;
+    });
+  });
+
+  const mid = idMassa();
+  const massaTotal = mid && porIng[mid] ? porIng[mid].total : 0;
+
+  return { porIng, totalPizzas, pesoTotal, massaTotal, recheio: pesoTotal - massaTotal };
+}
+
+/* ============================= NAVEGAÇÃO ============================= */
+
+const TITULOS = { pedido: 'Pedido', compras: 'Lista de compras', massa: 'Massa italiana', sabores: 'Cadastro' };
+let viewAtual = 'pedido';
+
+function irPara(v) {
+  viewAtual = v;
+  $$('.view').forEach(el => el.classList.toggle('hidden', el.id !== 'view-' + v));
+  $$('.tab').forEach(b => b.classList.toggle('is-active', b.dataset.view === v));
+  $('#viewTitle').textContent = TITULOS[v];
+  window.scrollTo({ top: 0 });
+  render();
+}
+$('#tabbar').addEventListener('click', e => {
+  const b = e.target.closest('.tab');
+  if (b) irPara(b.dataset.view);
+});
+
+function render() {
+  if (viewAtual === 'pedido')  renderPedido();
+  if (viewAtual === 'compras') renderCompras();
+  if (viewAtual === 'massa')   renderMassa();
+  if (viewAtual === 'sabores') renderSabores();
+}
+
+/* ============================= ABA: PEDIDO ============================= */
+
+function renderPedido() {
+  const t = calcular();
+
+  $('#resumoPedido').innerHTML =
+    stat(nf(t.totalPizzas), 'pizzas') +
+    stat(fmtQt(t.pesoTotal, 'g'), 'peso total') +
+    stat(fmtQt(t.recheio, 'g'), 'recheio');
+
+  $('#inpPessoas').value = S.pessoas;
+  $('#inpFatias').value = S.fatias;
+
+  const pessoas = Math.max(1, Number(S.pessoas) || 1);
+  const fatias = Math.max(1, Number(S.fatias) || 1);
+  const fatiasPessoa = (t.totalPizzas * fatias) / pessoas;
+  const gPessoa = t.pesoTotal / pessoas;
+  const pizzaPessoa = t.totalPizzas / pessoas;
+
+  let cls = 'ok', txt = 'Quantidade equilibrada: entre 2 e 4 fatias por pessoa.';
+  if (t.totalPizzas === 0) { cls = 'warn'; txt = 'Escolha os sabores abaixo para começar.'; }
+  else if (fatiasPessoa < 2) { cls = 'bad'; txt = 'Pode faltar. O normal é de 2 a 4 fatias por pessoa.'; }
+  else if (fatiasPessoa > 4) { cls = 'warn'; txt = 'Vai sobrar bastante — ótimo se quiser mandar comida pra casa.'; }
+
+  $('#porPessoa').innerHTML =
+    '<div><b>' + nf(fatiasPessoa, 1) + '</b><span>fatias / pessoa</span></div>' +
+    '<div><b>' + nf(pizzaPessoa, 2) + '</b><span>pizza / pessoa</span></div>' +
+    '<div><b>' + fmtQt(gPessoa, 'g') + '</b><span>comida / pessoa</span></div>' +
+    '<div class="aviso ' + cls + '">' + txt + '</div>';
+
+  const busca = ($('#buscaPedido').value || '').toLowerCase().trim();
+  const lista = S.sabores.filter(s => !busca || s.nome.toLowerCase().includes(busca));
+  const box = $('#listaPedido');
+
+  if (!lista.length) { box.innerHTML = '<p class="vazio">Nenhum sabor encontrado.</p>'; return; }
+
+  box.innerHTML = lista.map(s => {
+    const q = Number(S.pedido[s.id]) || 0;
+    return '<div class="row' + (q > 0 ? ' on' : '') + '">' +
+      '<div class="row-main"><span class="nome">' + esc(s.nome) +
+        (s.tipo === 'doce' ? '<span class="tag doce">doce</span>' : '') + '</span>' +
+        '<span class="sub">' + fmtQt(pesoSabor(s), 'g') + ' por pizza' +
+        (q > 0 ? ' &middot; total ' + fmtQt(pesoSabor(s) * q, 'g') : '') + '</span></div>' +
+      '<div class="qtd">' +
+        '<button type="button" data-ped="' + s.id + '" data-d="-1" aria-label="Menos">−</button>' +
+        '<span class="n">' + q + '</span>' +
+        '<button type="button" class="plus" data-ped="' + s.id + '" data-d="1" aria-label="Mais">+</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+function stat(valor, rotulo) {
+  return '<div class="stat"><b>' + valor + '</b><span>' + rotulo + '</span></div>';
+}
+
+$('#listaPedido').addEventListener('click', e => {
+  const b = e.target.closest('[data-ped]');
+  if (!b) return;
+  const id = b.dataset.ped;
+  const atual = Number(S.pedido[id]) || 0;
+  const novo = Math.max(0, atual + Number(b.dataset.d));
+  if (novo) S.pedido[id] = novo; else delete S.pedido[id];
+  salvar();
+  renderPedido();
+});
+
+$('#buscaPedido').addEventListener('input', renderPedido);
+
+$('#btnLimparPedido').addEventListener('click', () => {
+  if (!Object.keys(S.pedido).length) return;
+  if (!confirm('Zerar todas as quantidades do pedido?')) return;
+  S.pedido = {};
+  S.comprados = {};
+  salvar();
+  renderPedido();
+  toast('Pedido zerado');
+});
+
+$$('[data-pessoas]').forEach(b => b.addEventListener('click', () => {
+  S.pessoas = Math.max(1, (Number(S.pessoas) || 1) + Number(b.dataset.pessoas));
+  salvar(); renderPedido();
+}));
+$$('[data-fatias]').forEach(b => b.addEventListener('click', () => {
+  S.fatias = Math.max(1, (Number(S.fatias) || 1) + Number(b.dataset.fatias));
+  salvar(); renderPedido();
+}));
+$('#inpPessoas').addEventListener('input', e => {
+  S.pessoas = Math.max(1, Number(e.target.value) || 1); salvar();
+  const t = calcular(); atualizaPorPessoa(t);
+});
+$('#inpFatias').addEventListener('input', e => {
+  S.fatias = Math.max(1, Number(e.target.value) || 1); salvar();
+  const t = calcular(); atualizaPorPessoa(t);
+});
+function atualizaPorPessoa() { renderPedido(); }
+
+/* ============================= ABA: COMPRAS ============================= */
+
+let abertos = {};
+
+function renderCompras() {
+  const t = calcular();
+  const ids = Object.keys(t.porIng).filter(id => t.porIng[id].total > 0);
+
+  $('#resumoCompras').innerHTML =
+    stat(nf(ids.length), 'itens') +
+    stat(nf(t.totalPizzas), 'pizzas') +
+    stat(fmtQt(t.pesoTotal, 'g'), 'peso total');
+
+  const box = $('#listaCompras');
+  if (!ids.length) {
+    box.innerHTML = '<p class="vazio">Escolha as pizzas na aba <b>Pedido</b> e a lista aparece aqui.</p>';
+    return;
+  }
+
+  let html = '';
+  CATEGORIAS.concat(['(sem categoria)']).forEach(cat => {
+    const doGrupo = ids
+      .filter(id => {
+        const i = ing(id);
+        const c = (i && i.cat) || '(sem categoria)';
+        return c === cat;
+      })
+      .sort((a, b) => t.porIng[b].total - t.porIng[a].total);
+    if (!doGrupo.length) return;
+
+    html += '<p class="grupo-title">' + esc(cat) + '</p>';
+    doGrupo.forEach(id => {
+      const i = ing(id) || { nome: id, un: 'g' };
+      const d = t.porIng[id];
+      const done = !!S.comprados[id];
+      const open = !!abertos[id];
+      html += '<div class="compra' + (done ? ' done' : '') + '">' +
+        '<div class="compra-head">' +
+          '<button type="button" class="chk' + (done ? ' on' : '') + '" data-chk="' + id + '" aria-label="Marcar como comprado">✓</button>' +
+          '<span class="nome" data-det="' + id + '">' + esc(i.nome) + '</span>' +
+          '<span class="qt" data-det="' + id + '">' + fmtQt(d.total, i.un) + '</span>' +
+        '</div>' +
+        (open ? '<div class="compra-det">' + d.detalhes.map(x =>
+            '<div><span>' + esc(x.sabor) + ' — ' + x.pizzas + '× ' + fmtQt(x.porPizza, i.un) + '</span><b>' + fmtQt(x.total, i.un) + '</b></div>'
+          ).join('') + '</div>' : '') +
+      '</div>';
+    });
+  });
+  box.innerHTML = html;
+}
+
+$('#listaCompras').addEventListener('click', e => {
+  const c = e.target.closest('[data-chk]');
+  if (c) {
+    const id = c.dataset.chk;
+    if (S.comprados[id]) delete S.comprados[id]; else S.comprados[id] = true;
+    salvar(); renderCompras(); return;
+  }
+  const d = e.target.closest('[data-det]');
+  if (d) {
+    const id = d.dataset.det;
+    abertos[id] = !abertos[id];
+    renderCompras();
+  }
+});
+
+$('#btnDesmarcar').addEventListener('click', () => {
+  S.comprados = {}; salvar(); renderCompras();
+});
+
+$('#btnCompartilhar').addEventListener('click', async () => {
+  const t = calcular();
+  const ids = Object.keys(t.porIng).filter(id => t.porIng[id].total > 0);
+  if (!ids.length) { toast('Sua lista está vazia'); return; }
+
+  let txt = '🍕 LISTA DE COMPRAS\n';
+  txt += t.totalPizzas + ' pizzas para ' + S.pessoas + ' pessoas\n\n';
+  CATEGORIAS.concat(['(sem categoria)']).forEach(cat => {
+    const g = ids.filter(id => (((ing(id) || {}).cat) || '(sem categoria)') === cat);
+    if (!g.length) return;
+    txt += cat.toUpperCase() + '\n';
+    g.sort((a, b) => t.porIng[b].total - t.porIng[a].total).forEach(id => {
+      const i = ing(id) || { nome: id, un: 'g' };
+      txt += '- ' + i.nome + ': ' + fmtQt(t.porIng[id].total, i.un) + '\n';
+    });
+    txt += '\n';
+  });
+  txt += 'Sabores:\n';
+  S.sabores.forEach(s => { const q = S.pedido[s.id]; if (q) txt += '- ' + q + '× ' + s.nome + '\n'; });
+
+  try {
+    if (navigator.share) { await navigator.share({ title: 'Lista de compras', text: txt }); return; }
+    await navigator.clipboard.writeText(txt);
+    toast('Lista copiada! É só colar no WhatsApp.');
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    toast('Não consegui compartilhar aqui');
+  }
+});
+
+/* ============================= ABA: MASSA ============================= */
+
+function massaBase() {
+  const t = calcular();
+  return S.massa.override !== null && S.massa.override !== undefined
+    ? Number(S.massa.override) || 0
+    : t.massaTotal;
+}
+
+function renderMassa() {
+  const sel = $('#selPerfil');
+  if (!sel.options.length) {
+    sel.innerHTML = Object.keys(PERFIS_MASSA)
+      .map(k => '<option value="' + k + '">' + esc(PERFIS_MASSA[k].nome) + '</option>').join('');
+  }
+  sel.value = S.massa.perfil in PERFIS_MASSA ? S.massa.perfil : 'italiana';
+  const perfil = PERFIS_MASSA[sel.value];
+  $('#descPerfil').textContent = perfil.desc;
+
+  $('#inpBola').value = S.massa.bola;
+  const total = massaBase();
+  if (document.activeElement !== $('#inpMassaTotal')) $('#inpMassaTotal').value = Math.round(total);
+
+  const bola = Math.max(1, Number(S.massa.bola) || 300);
+  const bolas = total / bola;
+  const p = perfil.pct;
+  const farinha = total * p.farinha;
+  const agua = total * p.agua;
+  const hidr = farinha ? (agua / farinha) * 100 : 0;
+
+  const linha = (nome, valor, pct, dec) =>
+    '<div class="linha"><span>' + nome + (pct ? '<span class="pct">' + pct + '</span>' : '') +
+    '</span><b>' + (dec !== undefined ? nf(valor, dec) + ' g' : fmtQt(valor, 'g')) + '</b></div>';
+
+  $('#tabelaMassa').innerHTML =
+    linha('Farinha', farinha, ' ' + nf(p.farinha * 100, 1) + '%', 0) +
+    linha('Água', agua, ' ' + nf(p.agua * 100, 1) + '%', 0) +
+    linha('Sal', sal_(total, p), ' ' + nf(p.sal * 100, 1) + '%', 1) +
+    linha('Fermento biológico seco', total * p.fermento, ' ' + nf(p.fermento * 100, 2) + '%', 1) +
+    '<div class="linha destaque"><span>Massa total</span><b>' + fmtQt(total, 'g') + '</b></div>' +
+    '<div class="linha destaque"><span>Bolas de ' + nf(bola) + ' g</span><b>' + nf(bolas, 1) + '</b></div>' +
+    '<div class="linha destaque"><span>Hidratação (água ÷ farinha)</span><b>' + nf(hidr, 0) + '%</b></div>';
+
+  $('#cronogramas').innerHTML = CRONOGRAMAS.map((c, idx) =>
+    '<details class="crono"' + (idx === 0 ? ' open' : '') + '>' +
+      '<summary>' + esc(c.nome) + ' <small>' + esc(c.resumo) + '</small></summary>' +
+      '<ol>' + c.passos.map(t => '<li>' + esc(t) + '</li>').join('') + '</ol>' +
+    '</details>').join('');
+}
+function sal_(total, p) { return total * p.sal; }
+
+$('#selPerfil').addEventListener('change', e => { S.massa.perfil = e.target.value; salvar(); renderMassa(); });
+$('#inpBola').addEventListener('input', e => { S.massa.bola = Math.max(1, Number(e.target.value) || 300); salvar(); renderMassa(); });
+$('#inpMassaTotal').addEventListener('input', e => { S.massa.override = Math.max(0, Number(e.target.value) || 0); salvar(); renderMassa(); });
+$('#btnSyncMassa').addEventListener('click', () => {
+  S.massa.override = null; salvar(); renderMassa();
+  toast('Usando a massa do pedido');
+});
+
+/* ============================= ABA: CADASTRO ============================= */
+
+function renderSabores() {
+  const busca = ($('#buscaSabor').value || '').toLowerCase().trim();
+  const lista = S.sabores.filter(s => !busca || s.nome.toLowerCase().includes(busca));
+
+  $('#listaSabores').innerHTML = lista.length ? lista.map(s =>
+    '<div class="row" data-edit-sabor="' + s.id + '">' +
+      '<div class="row-main"><span class="nome">' + esc(s.nome) +
+        (s.tipo === 'doce' ? '<span class="tag doce">doce</span>' : '') + '</span>' +
+        '<span class="sub">' + Object.keys(s.itens || {}).length + ' ingredientes &middot; ' + fmtQt(pesoSabor(s), 'g') + '</span></div>' +
+      '<span class="chevron">›</span></div>').join('')
+    : '<p class="vazio">Nenhum sabor encontrado.</p>';
+
+  $('#listaIngredientes').innerHTML = S.ingredientes.map(i =>
+    '<div class="row" data-edit-ing="' + i.id + '">' +
+      '<div class="row-main"><span class="nome">' + esc(i.nome) + '</span>' +
+      '<span class="sub">' + esc(i.cat || '-') + ' &middot; ' + esc(i.un) + '</span></div>' +
+      '<span class="chevron">›</span></div>').join('');
+}
+
+$('#buscaSabor').addEventListener('input', renderSabores);
+$('#listaSabores').addEventListener('click', e => {
+  const r = e.target.closest('[data-edit-sabor]');
+  if (r) abrirSabor(r.dataset.editSabor);
+});
+$('#listaIngredientes').addEventListener('click', e => {
+  const r = e.target.closest('[data-edit-ing]');
+  if (r) abrirIngrediente(r.dataset.editIng);
+});
+$('#btnNovoSabor').addEventListener('click', () => abrirSabor(null));
+$('#btnNovoIngrediente').addEventListener('click', () => abrirIngrediente(null));
+
+/* ---------- diálogo de sabor ---------- */
+
+let editandoSabor = null;   // id ou null
+let rascunho = {};          // { ingId: gramas }
+
+function abrirSabor(id) {
+  editandoSabor = id;
+  const s = id ? sab(id) : null;
+  rascunho = s ? Object.assign({}, s.itens) : {};
+  $('#dlgSaborTitle').textContent = s ? 'Editar sabor' : 'Novo sabor';
+  $('#saborNome').value = s ? s.nome : '';
+  $('#saborTipo').value = s ? s.tipo : 'salgada';
+  $('#btnExcluirSabor').classList.toggle('hidden', !s);
+  desenhaItens();
+  $('#dlgSabor').showModal();
+}
+
+function desenhaItens() {
+  const box = $('#saborItens');
+  const ids = Object.keys(rascunho);
+  box.innerHTML = ids.length ? ids.map(iid => {
+    const i = ing(iid) || { nome: iid, un: 'g' };
+    return '<div class="item-linha">' +
+      '<span class="nome">' + esc(i.nome) + '</span>' +
+      '<input type="number" min="0" step="5" inputmode="numeric" value="' + (rascunho[iid] || 0) + '" data-qtd="' + iid + '">' +
+      '<span class="un">' + esc(i.un) + '</span>' +
+      '<button type="button" class="del" data-rm="' + iid + '" aria-label="Remover">✕</button>' +
+    '</div>';
+  }).join('') : '<p class="hint">Nenhum ingrediente ainda. Adicione abaixo.</p>';
+
+  const disp = S.ingredientes.filter(i => !(i.id in rascunho));
+  $('#novoItemIng').innerHTML = disp.length
+    ? disp.map(i => '<option value="' + i.id + '">' + esc(i.nome) + '</option>').join('')
+    : '<option value="">— todos já adicionados —</option>';
+
+  const tot = Object.values(rascunho).reduce((a, b) => a + (Number(b) || 0), 0);
+  $('#saborTotal').textContent = fmtQt(tot, 'g');
+}
+
+$('#saborItens').addEventListener('input', e => {
+  const inp = e.target.closest('[data-qtd]');
+  if (!inp) return;
+  rascunho[inp.dataset.qtd] = Math.max(0, Number(inp.value) || 0);
+  const tot = Object.values(rascunho).reduce((a, b) => a + (Number(b) || 0), 0);
+  $('#saborTotal').textContent = fmtQt(tot, 'g');
+});
+$('#saborItens').addEventListener('click', e => {
+  const b = e.target.closest('[data-rm]');
+  if (!b) return;
+  delete rascunho[b.dataset.rm];
+  desenhaItens();
+});
+$('#btnAddItem').addEventListener('click', () => {
+  const iid = $('#novoItemIng').value;
+  if (!iid) return;
+  const q = Number($('#novoItemQtd').value) || 0;
+  rascunho[iid] = q;
+  $('#novoItemQtd').value = '';
+  desenhaItens();
+});
+
+function salvarSabor() {
+  const nome = $('#saborNome').value.trim();
+  if (!nome) { toast('Dê um nome para o sabor'); $('#saborNome').focus(); return; }
+  const tipo = $('#saborTipo').value;
+  const itens = {};
+  Object.keys(rascunho).forEach(k => { if (Number(rascunho[k]) > 0) itens[k] = Number(rascunho[k]); });
+
+  if (editandoSabor) {
+    const s = sab(editandoSabor);
+    s.nome = nome; s.tipo = tipo; s.itens = itens;
+  } else {
+    const id = idUnico(nome, S.sabores);
+    S.sabores.push({ id, nome, tipo, itens });
+  }
+  salvar();
+  $('#dlgSabor').close();
+  render();
+  toast('Sabor salvo');
+}
+$('#btnSalvarSabor').addEventListener('click', salvarSabor);
+$('#formSabor').addEventListener('submit', e => { e.preventDefault(); salvarSabor(); });
+
+$('#btnExcluirSabor').addEventListener('click', () => {
+  if (!editandoSabor) return;
+  const s = sab(editandoSabor);
+  if (!confirm('Excluir o sabor "' + s.nome + '"?')) return;
+  S.sabores = S.sabores.filter(x => x.id !== editandoSabor);
+  delete S.pedido[editandoSabor];
+  salvar();
+  $('#dlgSabor').close();
+  render();
+  toast('Sabor excluído');
+});
+
+/* ---------- diálogo de ingrediente ---------- */
+
+let editandoIng = null;
+
+function abrirIngrediente(id) {
+  editandoIng = id;
+  const i = id ? ing(id) : null;
+  $('#dlgIngTitle').textContent = i ? 'Editar ingrediente' : 'Novo ingrediente';
+  $('#ingNome').value = i ? i.nome : '';
+  $('#ingUn').value = i ? i.un : 'g';
+  $('#ingCat').innerHTML = CATEGORIAS.map(c =>
+    '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+  $('#ingCat').value = i && CATEGORIAS.includes(i.cat) ? i.cat : 'Outros';
+  $('#btnExcluirIng').classList.toggle('hidden', !i);
+  $('#dlgIngrediente').showModal();
+}
+
+function salvarIngrediente() {
+  const nome = $('#ingNome').value.trim();
+  if (!nome) { toast('Dê um nome para o ingrediente'); $('#ingNome').focus(); return; }
+  const un = $('#ingUn').value, cat = $('#ingCat').value;
+  if (editandoIng) {
+    const i = ing(editandoIng);
+    i.nome = nome; i.un = un; i.cat = cat;
+  } else {
+    S.ingredientes.push({ id: idUnico(nome, S.ingredientes), nome, un, cat });
+  }
+  salvar();
+  $('#dlgIngrediente').close();
+  render();
+  toast('Ingrediente salvo');
+}
+$('#btnSalvarIng').addEventListener('click', salvarIngrediente);
+$('#dlgIngrediente').querySelector('form').addEventListener('submit', e => { e.preventDefault(); salvarIngrediente(); });
+
+$('#btnExcluirIng').addEventListener('click', () => {
+  if (!editandoIng) return;
+  const i = ing(editandoIng);
+  const usado = S.sabores.filter(s => editandoIng in (s.itens || {}));
+  const aviso = usado.length
+    ? '\n\nEle é usado em ' + usado.length + ' sabor(es) e será removido deles também.'
+    : '';
+  if (!confirm('Excluir "' + i.nome + '"?' + aviso)) return;
+  S.ingredientes = S.ingredientes.filter(x => x.id !== editandoIng);
+  S.sabores.forEach(s => { delete s.itens[editandoIng]; });
+  delete S.comprados[editandoIng];
+  salvar();
+  $('#dlgIngrediente').close();
+  render();
+  toast('Ingrediente excluído');
+});
+
+/* ---------- fechar diálogos ---------- */
+$$('dialog').forEach(d => {
+  d.addEventListener('click', e => {
+    if (e.target.matches('[data-close]')) d.close();
+    if (e.target === d) d.close();          // clique no backdrop
+  });
+});
+
+/* ============================= MENU / BACKUP ============================= */
+
+$('#btnMenu').addEventListener('click', () => $('#dlgMenu').showModal());
+
+$('#btnExportar').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'calculadora-pizza-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast('Backup gerado');
+});
+
+$('#btnImportar').addEventListener('click', () => $('#fileImport').click());
+$('#fileImport').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const dados = JSON.parse(fr.result);
+      if (!dados || !Array.isArray(dados.ingredientes) || !Array.isArray(dados.sabores)) {
+        throw new Error('formato');
+      }
+      if (!confirm('Isso substitui os dados atuais. Continuar?')) return;
+      S = Object.assign(estadoPadrao(), dados);
+      salvar();
+      $('#dlgMenu').close();
+      render();
+      toast('Backup importado');
+    } catch (err) {
+      toast('Arquivo inválido');
+    }
+  };
+  fr.readAsText(f);
+  e.target.value = '';
+});
+
+$('#btnReset').addEventListener('click', () => {
+  if (!confirm('Isso apaga seus sabores e volta para a lista original da planilha. Continuar?')) return;
+  const pessoas = S.pessoas, fatias = S.fatias;
+  S = estadoPadrao();
+  S.pessoas = pessoas; S.fatias = fatias;
+  salvar();
+  $('#dlgMenu').close();
+  render();
+  toast('Dados restaurados');
+});
+
+/* ---------- instalar app ---------- */
+let promptInstalar = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  promptInstalar = e;
+  if ($('#btnInstalar')) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'menu-item'; b.id = 'btnInstalar';
+  b.textContent = '📲 Instalar na tela de início';
+  b.addEventListener('click', async () => {
+    if (!promptInstalar) return;
+    promptInstalar.prompt();
+    await promptInstalar.userChoice;
+    promptInstalar = null;
+    b.remove();
+    $('#dlgMenu').close();
+  });
+  $('.menu-list').prepend(b);
+});
+
+/* ============================= SERVICE WORKER ============================= */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+/* ============================= START ============================= */
+irPara('pedido');
+
+})();

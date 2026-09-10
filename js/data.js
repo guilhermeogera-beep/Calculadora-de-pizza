@@ -1,6 +1,13 @@
 /* Dados iniciais - extraidos da planilha "pizza.xlsx" (abas base / final).
    Tudo em gramas. O usuario pode editar, adicionar e apagar pela propria PWA. */
 
+/* IMPORTANTE: sempre que voce adicionar um sabor ou ingrediente aqui embaixo,
+   suba este numero em 1. E ele que faz os aparelhos que JA usam o app receberem
+   a novidade - sem numero novo, quem ja tem dados salvos nao ve o que voce
+   acrescentou. Sabores que o proprio usuario criou ou editou nunca sao tocados,
+   e o que ele apagou de proposito nao volta. */
+const CATALOGO_VERSAO = 2;
+
 const CATEGORIAS = [
   'Massa',
   'Molhos',
@@ -28,6 +35,7 @@ const SEED_INGREDIENTES = [
   { id: 'azeitona',      nome: 'Azeitona',             un: 'g', cat: 'Hortifrúti' },
   { id: 'nutella',       nome: 'Nutella',              un: 'g', cat: 'Doces' },
   { id: 'banana',        nome: 'Banana',               un: 'g', cat: 'Hortifrúti' },
+  { id: 'morango',       nome: 'Morango',              un: 'g', cat: 'Hortifrúti' },
   { id: 'goiabada',      nome: 'Goiabada',             un: 'g', cat: 'Doces' },
   { id: 'calabresa',     nome: 'Calabresa',            un: 'g', cat: 'Carnes e frios' },
   { id: 'abobrinha',     nome: 'Abobrinha',            un: 'g', cat: 'Hortifrúti' },
@@ -70,6 +78,8 @@ const SEED_SABORES = [
       massa: 300 } },
   { id: 'banana-nutella', nome: 'Banana com Nutella', tipo: 'doce', itens: {
       massa: 300, nutella: 150, banana: 100 } },
+  { id: 'morango-nutella', nome: 'Morango com Nutella', tipo: 'doce', itens: {
+      massa: 300, nutella: 150, morango: 120 } },
   { id: 'romeu-julieta', nome: 'Romeu e Julieta', tipo: 'doce', itens: {
       massa: 300, queijo: 150, goiabada: 200 } },
   { id: 'banana-doce-leite', nome: 'Banana com doce de leite', tipo: 'doce', itens: {

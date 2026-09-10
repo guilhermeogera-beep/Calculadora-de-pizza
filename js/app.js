@@ -12,8 +12,10 @@ const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 function estadoPadrao() {
   return {
     v: 1,
+    catalogo: CATALOGO_VERSAO,
     ingredientes: JSON.parse(JSON.stringify(SEED_INGREDIENTES)),
     sabores: JSON.parse(JSON.stringify(SEED_SABORES)),
+    removidos: { sabores: [], ingredientes: [] },
     pedido: {},
     pessoas: 10,
     fatias: 8,
@@ -22,16 +24,53 @@ function estadoPadrao() {
   };
 }
 
-let S;
+let S, salvoBruto = null;
 try {
   const raw = localStorage.getItem(KEY);
-  S = raw ? Object.assign(estadoPadrao(), JSON.parse(raw)) : estadoPadrao();
+  salvoBruto = raw ? JSON.parse(raw) : null;
+  S = salvoBruto ? Object.assign(estadoPadrao(), salvoBruto) : estadoPadrao();
 } catch (e) {
   S = estadoPadrao();
 }
 if (!Array.isArray(S.ingredientes) || !S.ingredientes.length) S.ingredientes = estadoPadrao().ingredientes;
 if (!Array.isArray(S.sabores)) S.sabores = estadoPadrao().sabores;
 if (!S.massa) S.massa = estadoPadrao().massa;
+
+/* Traz para um aparelho que já usa o app os sabores/ingredientes acrescentados ao
+   data.js depois. Nunca sobrescreve o que já existe (o usuário pode ter editado)
+   e nunca ressuscita o que ele apagou de propósito. */
+function lembrarRemovido(tipo, id) {
+  if (!S.removidos) S.removidos = { sabores: [], ingredientes: [] };
+  if (!Array.isArray(S.removidos[tipo])) S.removidos[tipo] = [];
+  if (S.removidos[tipo].indexOf(id) === -1) S.removidos[tipo].push(id);
+}
+
+function mesclarCatalogo(versaoSalva) {
+  if (Number(versaoSalva) >= CATALOGO_VERSAO) return { sabores: 0, ingredientes: 0 };
+
+  if (!S.removidos) S.removidos = { sabores: [], ingredientes: [] };
+  const remS = Array.isArray(S.removidos.sabores) ? S.removidos.sabores : [];
+  const remI = Array.isArray(S.removidos.ingredientes) ? S.removidos.ingredientes : [];
+
+  let ni = 0, ns = 0;
+  SEED_INGREDIENTES.forEach(seed => {
+    if (S.ingredientes.some(i => i.id === seed.id) || remI.indexOf(seed.id) !== -1) return;
+    S.ingredientes.push(JSON.parse(JSON.stringify(seed)));
+    ni++;
+  });
+  SEED_SABORES.forEach(seed => {
+    if (S.sabores.some(s => s.id === seed.id) || remS.indexOf(seed.id) !== -1) return;
+    S.sabores.push(JSON.parse(JSON.stringify(seed)));
+    ns++;
+  });
+
+  S.catalogo = CATALOGO_VERSAO;
+  salvar();
+  return { sabores: ns, ingredientes: ni };
+}
+
+// A mesclagem em si roda lá no fim do arquivo: ela chama salvar(), que só existe
+// depois daqui.
 
 let salvarTimer = null;
 function salvar() {
@@ -581,6 +620,7 @@ $('#btnExcluirSabor').addEventListener('click', () => {
   if (!confirm('Excluir o sabor "' + s.nome + '"?')) return;
   S.sabores = S.sabores.filter(x => x.id !== editandoSabor);
   delete S.pedido[editandoSabor];
+  if (SEED_SABORES.some(x => x.id === editandoSabor)) lembrarRemovido('sabores', editandoSabor);
   salvar();
   $('#dlgSabor').close();
   render();
@@ -633,6 +673,7 @@ $('#btnExcluirIng').addEventListener('click', () => {
   S.ingredientes = S.ingredientes.filter(x => x.id !== editandoIng);
   S.sabores.forEach(s => { delete s.itens[editandoIng]; });
   delete S.comprados[editandoIng];
+  if (SEED_INGREDIENTES.some(x => x.id === editandoIng)) lembrarRemovido('ingredientes', editandoIng);
   salvar();
   $('#dlgIngrediente').close();
   render();
@@ -674,6 +715,8 @@ $('#fileImport').addEventListener('change', e => {
       }
       if (!confirm('Isso substitui os dados atuais. Continuar?')) return;
       S = Object.assign(estadoPadrao(), dados);
+      // backup antigo pode não ter os sabores mais novos
+      mesclarCatalogo(Number(dados.catalogo) || 0);
       salvar();
       $('#dlgMenu').close();
       render();
@@ -725,6 +768,17 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 }
 
 /* ============================= START ============================= */
+
+// Sem nada salvo, o seed já veio inteiro — não há o que mesclar.
+const novidades = mesclarCatalogo(salvoBruto ? (Number(salvoBruto.catalogo) || 0) : CATALOGO_VERSAO);
+
 irPara('pedido');
+
+if (novidades.sabores || novidades.ingredientes) {
+  const partes = [];
+  if (novidades.sabores) partes.push(novidades.sabores + (novidades.sabores > 1 ? ' sabores novos' : ' sabor novo'));
+  if (novidades.ingredientes) partes.push(novidades.ingredientes + (novidades.ingredientes > 1 ? ' ingredientes novos' : ' ingrediente novo'));
+  toast('🍕 ' + partes.join(' e '));
+}
 
 })();
